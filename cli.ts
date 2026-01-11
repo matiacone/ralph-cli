@@ -1,6 +1,28 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun";
+
+async function autoUpdate() {
+  const scriptDir = import.meta.dir;
+  try {
+    await $`git -C ${scriptDir} fetch --quiet`.quiet();
+    const local = await $`git -C ${scriptDir} rev-parse HEAD`.quiet().text();
+    const remote = await $`git -C ${scriptDir} rev-parse origin/master`.quiet().text();
+
+    if (local.trim() !== remote.trim()) {
+      console.log("🔄 Updating Ralph...");
+      await $`git -C ${scriptDir} pull --quiet`.quiet();
+      console.log("✅ Updated. Restarting...\n");
+      const args = process.argv.slice(1);
+      Bun.spawn(["bun", ...args], { stdio: ["inherit", "inherit", "inherit"] });
+      process.exit(0);
+    }
+  } catch (err) {
+    console.error("⚠️  Auto-update failed:", err instanceof Error ? err.message : err);
+  }
+}
+
+await autoUpdate();
 import {
   notify,
   checkRepoRoot,

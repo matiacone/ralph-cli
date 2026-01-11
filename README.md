@@ -7,9 +7,11 @@ Ralph runs Claude Code in a loop, working through backlog tasks or feature plans
 ## Installation
 
 ```bash
-bun install
-bun link
+git clone https://github.com/matiacone/ralph-cli ~/.ralph-cli
+cd ~/.ralph-cli && bun install && bun link
 ```
+
+Ralph auto-updates on startup when new versions are available.
 
 ## Setup
 
