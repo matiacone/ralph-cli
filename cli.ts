@@ -459,6 +459,7 @@ async function backlog(args: string[]) {
 
   if (once) {
     console.log("🔄 Ralph Backlog (single iteration)\n");
+    await appendToLog(undefined, `\n${"=".repeat(60)}\nSession Start - Single Iteration\n${"=".repeat(60)}\n`);
     const args = ["claude", "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose", backlogPrompt];
     const proc = Bun.spawn(args, {
       stdio: ["inherit", "pipe", "inherit"],
@@ -472,6 +473,7 @@ async function backlog(args: string[]) {
       const { done, value } = await reader.read();
       if (done) break;
       const text = decoder.decode(value);
+      await appendToLog(undefined, text);
       const { output } = formatter.parse(text);
       if (output) process.stdout.write(output);
     }
@@ -512,6 +514,8 @@ async function backlog(args: string[]) {
     console.log(`${c.bold}Iteration ${i}${c.reset}`);
     console.log(`${c.dim}════════════════════════════════════════${c.reset}\n`);
 
+    await appendToLog(undefined, `\n${"=".repeat(60)}\nSession Start - Iteration ${i}\n${"=".repeat(60)}\n`);
+
     const args = ["claude", "--permission-mode", "bypassPermissions", "-p", "--output-format", "stream-json", "--verbose", backlogPrompt];
 
     const proc = Bun.spawn(args, {
@@ -528,6 +532,7 @@ async function backlog(args: string[]) {
       if (done) break;
       const text = decoder.decode(value);
       rawOutput.push(text);
+      await appendToLog(undefined, text);
 
       const { output } = formatter.parse(text);
       if (output) process.stdout.write(output);

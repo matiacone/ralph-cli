@@ -29,7 +29,7 @@
         "Autonomous loop logs all streamed chunks",
         "Log file created at .ralph/ralph.log"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Add session markers to logs",
