@@ -7,7 +7,8 @@
       "mcp__plugin_context7_context7__query-docs",
       "Bash(bun test:*)",
       "Bash(git show-branch:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(bun run check-types:*)"
     ]
   }
 }

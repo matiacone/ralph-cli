@@ -169,12 +169,18 @@ class StreamFormatter {
   private inCodeBlock = false;
   private codeBlockLang = '';
   private lineBuffer = '';
+  private assistantText = '';
 
   reset() {
     this.buffer = '';
     this.inCodeBlock = false;
     this.codeBlockLang = '';
     this.lineBuffer = '';
+    this.assistantText = '';
+  }
+
+  getAssistantText(): string {
+    return this.assistantText;
   }
 
   private formatLine(line: string): string {
@@ -254,6 +260,7 @@ class StreamFormatter {
         if (event.type === 'assistant' && event.message?.content) {
           for (const block of event.message.content) {
             if (block.type === 'text') {
+              this.assistantText += block.text;
               output += this.formatText(block.text);
             }
           }
@@ -390,8 +397,8 @@ async function feature(name: string, once: boolean) {
     const remaining = formatter.flush();
     if (remaining) process.stdout.write(remaining);
 
-    const fullOutput = rawOutput.join("");
     const code = await proc.exited;
+    const assistantText = formatter.getAssistantText();
     await writeState({ ...state, iteration: i, status: "running", feature: name });
 
     if (code !== 0) {
@@ -401,14 +408,14 @@ async function feature(name: string, once: boolean) {
       process.exit(code);
     }
 
-    if (fullOutput.includes("<promise>COMPLETE</promise>")) {
+    if (assistantText.includes("<promise>COMPLETE</promise>")) {
       console.log("\n✅ Feature complete!");
       await writeState({ ...state, iteration: i, status: "completed", feature: name });
       await notify("Ralph Complete", `Feature '${name}' complete after ${i} iterations`);
       process.exit(0);
     }
 
-    if (fullOutput.includes("<promise>STUCK</promise>")) {
+    if (assistantText.includes("<promise>STUCK</promise>")) {
       console.log("\n🛑 Claude is stuck");
       await writeState({ ...state, iteration: i, status: "stuck", feature: name });
       await notify("Ralph Stuck", `Exhausted options after ${i} iterations`, "high");
@@ -540,8 +547,8 @@ async function backlog(args: string[]) {
     const remaining = formatter.flush();
     if (remaining) process.stdout.write(remaining);
 
-    const fullOutput = rawOutput.join("");
     const code = await proc.exited;
+    const assistantText = formatter.getAssistantText();
     await writeState({ ...state, iteration: i, status: "running" });
 
     if (code !== 0) {
@@ -551,14 +558,14 @@ async function backlog(args: string[]) {
       process.exit(code);
     }
 
-    if (fullOutput.includes("<promise>COMPLETE</promise>")) {
+    if (assistantText.includes("<promise>COMPLETE</promise>")) {
       console.log("\n✅ All tasks complete!");
       await writeState({ ...state, iteration: i, status: "completed" });
       await notify("Ralph Complete", `All tasks complete after ${i} iterations`);
       process.exit(0);
     }
 
-    if (fullOutput.includes("<promise>STUCK</promise>")) {
+    if (assistantText.includes("<promise>STUCK</promise>")) {
       console.log("\n🛑 Claude is stuck");
       await writeState({ ...state, iteration: i, status: "stuck" });
       await notify("Ralph Stuck", `Exhausted options after ${i} iterations`, "high");
