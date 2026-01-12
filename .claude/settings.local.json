@@ -5,7 +5,9 @@
       "Bash(git -C /home/mathew/creations/ralph-cli log --oneline -10)",
       "mcp__plugin_context7_context7__resolve-library-id",
       "mcp__plugin_context7_context7__query-docs",
-      "Bash(bun test:*)"
+      "Bash(bun test:*)",
+      "Bash(git show-branch:*)",
+      "Bash(grep:*)"
     ]
   }
 }

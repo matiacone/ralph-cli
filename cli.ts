@@ -40,6 +40,18 @@ import {
 } from "./lib";
 import { watch, type FSWatcher } from "fs";
 
+const c = {
+  reset: "\x1b[0m",
+  dim: "\x1b[2m",
+  bold: "\x1b[1m",
+  cyan: "\x1b[36m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  magenta: "\x1b[35m",
+  blue: "\x1b[34m",
+  gray: "\x1b[90m",
+};
+
 const BASH_COMPLETION_SCRIPT = `# Ralph CLI bash completion
 # Install: ralph completions bash >> ~/.bashrc
 
@@ -151,27 +163,126 @@ async function setup(args: string[]) {
   console.log("  ralph feature <name>  - Run a feature plan");
 }
 
-function parseStreamJson(text: string, buffer: string): { content: string; remaining: string } {
-  const combined = buffer + text;
-  const lines = combined.split('\n');
-  const remaining = lines.pop() || ''; // Keep incomplete line for next chunk
-  let content = '';
+class StreamFormatter {
+  private buffer = '';
+  private inCodeBlock = false;
+  private codeBlockLang = '';
+  private lineBuffer = '';
 
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    try {
-      const event = JSON.parse(line);
-      if (event.type === 'assistant' && event.message?.content) {
-        for (const block of event.message.content) {
-          if (block.type === 'text') {
-            content += block.text;
-          }
-        }
-      }
-    } catch {}
+  reset() {
+    this.buffer = '';
+    this.inCodeBlock = false;
+    this.codeBlockLang = '';
+    this.lineBuffer = '';
   }
 
-  return { content, remaining };
+  private formatLine(line: string): string {
+    // Code block start
+    if (line.startsWith('```')) {
+      this.inCodeBlock = !this.inCodeBlock;
+      if (this.inCodeBlock) {
+        this.codeBlockLang = line.slice(3).trim();
+        const lang = this.codeBlockLang ? ` ${c.dim}${this.codeBlockLang}${c.reset}` : '';
+        return `${c.dim}┌──${lang}${c.reset}\n`;
+      } else {
+        this.codeBlockLang = '';
+        return `${c.dim}└──${c.reset}\n`;
+      }
+    }
+
+    // Inside code block - dim the code
+    if (this.inCodeBlock) {
+      return `${c.dim}│${c.reset} ${c.cyan}${line}${c.reset}\n`;
+    }
+
+    // Headers
+    if (line.startsWith('### ')) {
+      return `${c.bold}${c.blue}${line.slice(4)}${c.reset}\n`;
+    }
+    if (line.startsWith('## ')) {
+      return `${c.bold}${c.magenta}${line.slice(3)}${c.reset}\n`;
+    }
+    if (line.startsWith('# ')) {
+      return `${c.bold}${c.green}${line.slice(2)}${c.reset}\n`;
+    }
+
+    // Bullet points
+    if (line.startsWith('- ') || line.startsWith('* ')) {
+      return `${c.yellow}•${c.reset} ${line.slice(2)}\n`;
+    }
+
+    // Numbered lists
+    const numberedMatch = line.match(/^(\d+)\. (.*)$/);
+    if (numberedMatch) {
+      return `${c.yellow}${numberedMatch[1]}.${c.reset} ${numberedMatch[2]}\n`;
+    }
+
+    // Inline code
+    const formatted = line.replace(/`([^`]+)`/g, `${c.cyan}$1${c.reset}`);
+
+    return formatted + '\n';
+  }
+
+  formatText(text: string): string {
+    let output = '';
+    const combined = this.lineBuffer + text;
+    const lines = combined.split('\n');
+
+    // Keep the last incomplete line in the buffer
+    this.lineBuffer = lines.pop() || '';
+
+    for (const line of lines) {
+      output += this.formatLine(line);
+    }
+
+    return output;
+  }
+
+  parse(text: string): { output: string; remaining: string } {
+    const combined = this.buffer + text;
+    const lines = combined.split('\n');
+    const remaining = lines.pop() || '';
+    let output = '';
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const event = JSON.parse(line);
+
+        // Handle assistant text content
+        if (event.type === 'assistant' && event.message?.content) {
+          for (const block of event.message.content) {
+            if (block.type === 'text') {
+              output += this.formatText(block.text);
+            }
+          }
+        }
+
+        // Handle tool use - show what tool is being called
+        if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
+          const toolName = event.content_block.name;
+          output += `\n${c.dim}─── ${c.yellow}${toolName}${c.dim} ───${c.reset}\n`;
+        }
+
+        // Handle tool results
+        if (event.type === 'result' && event.subtype === 'success') {
+          output += `${c.dim}───────────────${c.reset}\n\n`;
+        }
+      } catch {}
+    }
+
+    this.buffer = remaining;
+    return { output, remaining };
+  }
+
+  flush(): string {
+    if (this.lineBuffer) {
+      const output = this.formatLine(this.lineBuffer);
+      this.lineBuffer = '';
+      return output;
+    }
+    return '';
+  }
 }
 
 async function feature(name: string, once: boolean) {
@@ -209,16 +320,17 @@ async function feature(name: string, once: boolean) {
 
     const reader = proc.stdout.getReader();
     const decoder = new TextDecoder();
-    let buffer = '';
+    const formatter = new StreamFormatter();
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       const text = decoder.decode(value);
-      const { content, remaining } = parseStreamJson(text, buffer);
-      buffer = remaining;
-      if (content) process.stdout.write(content);
+      const { output } = formatter.parse(text);
+      if (output) process.stdout.write(output);
     }
+    const remaining = formatter.flush();
+    if (remaining) process.stdout.write(remaining);
 
     const code = await proc.exited;
     if (code !== 0) {
@@ -245,9 +357,9 @@ async function feature(name: string, once: boolean) {
   await writeState({ ...state, status: "running", feature: name });
 
   for (let i = 1; i <= max; i++) {
-    console.log("========================================");
-    console.log(`Iteration ${i}`);
-    console.log("========================================\n");
+    console.log(`${c.dim}════════════════════════════════════════${c.reset}`);
+    console.log(`${c.bold}Iteration ${i}${c.reset}`);
+    console.log(`${c.dim}════════════════════════════════════════${c.reset}\n`);
 
     const args = ["claude", "--permission-mode", "bypassPermissions", "-p", "--output-format", "stream-json", "--verbose", prompt];
 
@@ -255,23 +367,24 @@ async function feature(name: string, once: boolean) {
       stdio: ["inherit", "pipe", "inherit"],
     });
 
-    const output: string[] = [];
+    const rawOutput: string[] = [];
     const reader = proc.stdout.getReader();
     const decoder = new TextDecoder();
-    let buffer = '';
+    const formatter = new StreamFormatter();
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       const text = decoder.decode(value);
-      output.push(text);
+      rawOutput.push(text);
 
-      const { content, remaining } = parseStreamJson(text, buffer);
-      buffer = remaining;
-      if (content) process.stdout.write(content);
+      const { output } = formatter.parse(text);
+      if (output) process.stdout.write(output);
     }
+    const remaining = formatter.flush();
+    if (remaining) process.stdout.write(remaining);
 
-    const fullOutput = output.join("");
+    const fullOutput = rawOutput.join("");
     const code = await proc.exited;
     await writeState({ ...state, iteration: i, status: "running", feature: name });
 
@@ -347,16 +460,17 @@ async function backlog(args: string[]) {
 
     const reader = proc.stdout.getReader();
     const decoder = new TextDecoder();
-    let buffer = '';
+    const formatter = new StreamFormatter();
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       const text = decoder.decode(value);
-      const { content, remaining } = parseStreamJson(text, buffer);
-      buffer = remaining;
-      if (content) process.stdout.write(content);
+      const { output } = formatter.parse(text);
+      if (output) process.stdout.write(output);
     }
+    const remaining = formatter.flush();
+    if (remaining) process.stdout.write(remaining);
 
     const code = await proc.exited;
     if (code !== 0) {
@@ -388,9 +502,9 @@ async function backlog(args: string[]) {
   await writeState({ ...state, status: "running" });
 
   for (let i = current + 1; i <= max; i++) {
-    console.log("========================================");
-    console.log(`Iteration ${i}`);
-    console.log("========================================\n");
+    console.log(`${c.dim}════════════════════════════════════════${c.reset}`);
+    console.log(`${c.bold}Iteration ${i}${c.reset}`);
+    console.log(`${c.dim}════════════════════════════════════════${c.reset}\n`);
 
     const args = ["claude", "--permission-mode", "bypassPermissions", "-p", "--output-format", "stream-json", "--verbose", backlogPrompt];
 
@@ -398,23 +512,24 @@ async function backlog(args: string[]) {
       stdio: ["inherit", "pipe", "inherit"],
     });
 
-    const output: string[] = [];
+    const rawOutput: string[] = [];
     const reader = proc.stdout.getReader();
     const decoder = new TextDecoder();
-    let buffer = '';
+    const formatter = new StreamFormatter();
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       const text = decoder.decode(value);
-      output.push(text);
+      rawOutput.push(text);
 
-      const { content, remaining } = parseStreamJson(text, buffer);
-      buffer = remaining;
-      if (content) process.stdout.write(content);
+      const { output } = formatter.parse(text);
+      if (output) process.stdout.write(output);
     }
+    const remaining = formatter.flush();
+    if (remaining) process.stdout.write(remaining);
 
-    const fullOutput = output.join("");
+    const fullOutput = rawOutput.join("");
     const code = await proc.exited;
     await writeState({ ...state, iteration: i, status: "running" });
 
