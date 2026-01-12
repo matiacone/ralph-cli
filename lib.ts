@@ -14,7 +14,7 @@ const VCS_INSTRUCTIONS = {
     updatePr: `git push`,
   },
   graphite: {
-    createBranch: `gt create --all -m "<message>"`,
+    createBranch: `gt create <branch-name> --all -m "<message>"`,
     submit: `gt submit --no-interactive`,
     modifyCommit: `gt modify --all -c -m "<message>"`,
     updatePr: `gt submit --no-interactive`,
