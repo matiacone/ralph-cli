@@ -31,12 +31,14 @@ import {
   readBacklog,
   getFeatureDir,
   listFeatures,
+  listOpenFeatures,
   getBacklogPrompt,
   getFeaturePrompt,
   readConfig,
   writeConfig,
   readTasksFile,
   getIncompleteTaskTitles,
+  hasOpenTasks,
   appendToLog,
 } from "./lib";
 import { watch, type FSWatcher } from "fs";
@@ -408,7 +410,9 @@ async function feature(name: string, once: boolean) {
       process.exit(code);
     }
 
-    if (assistantText.includes("<promise>COMPLETE</promise>")) {
+    // Check if all tasks are complete by reading the JSON file
+    const taskFile = await readTasksFile(`${dir}/tasks.json`);
+    if (taskFile && !hasOpenTasks(taskFile)) {
       console.log("\n✅ Feature complete!");
       await writeState({ ...state, iteration: i, status: "completed", feature: name });
       await notify("Ralph Complete", `Feature '${name}' complete after ${i} iterations`);
@@ -558,7 +562,9 @@ async function backlog(args: string[]) {
       process.exit(code);
     }
 
-    if (assistantText.includes("<promise>COMPLETE</promise>")) {
+    // Check if all tasks are complete by reading the JSON file
+    const backlogTaskFile = await readTasksFile(".ralph/backlog.json");
+    if (backlogTaskFile && !hasOpenTasks(backlogTaskFile)) {
       console.log("\n✅ All tasks complete!");
       await writeState({ ...state, iteration: i, status: "completed" });
       await notify("Ralph Complete", `All tasks complete after ${i} iterations`);
@@ -608,7 +614,7 @@ async function watchMode(stream: boolean) {
   for (const name of features) {
     const tasksPath = `.ralph/features/${name}/tasks.json`;
     const taskFile = await readTasksFile(tasksPath);
-    if (taskFile) {
+    if (taskFile && hasOpenTasks(taskFile)) {
       watchTargets.set(tasksPath, getIncompleteTaskTitles(taskFile));
     }
   }
@@ -734,7 +740,7 @@ async function watchMode(stream: boolean) {
       const tasksPath = `.ralph/features/${name}/tasks.json`;
       if (!watchTargets.has(tasksPath)) {
         const taskFile = await readTasksFile(tasksPath);
-        if (taskFile) {
+        if (taskFile && hasOpenTasks(taskFile)) {
           console.log(`📁 New feature discovered: ${name}`);
           watchTargets.set(tasksPath, getIncompleteTaskTitles(taskFile));
           setupWatcher(tasksPath);
@@ -915,7 +921,7 @@ async function list() {
 
 async function completions(args: string[]) {
   if (args.includes("--list-features")) {
-    const features = await listFeatures();
+    const features = await listOpenFeatures();
     for (const f of features) console.log(f);
     return;
   }

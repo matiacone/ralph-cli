@@ -105,7 +105,6 @@ This should be the one YOU decide has the highest priority - not necessarily the
      * Use '${i.modifyCommit}' to add a new commit
      * Then use '${i.updatePr}' to push and update the PR
 ONLY WORK ON A SINGLE TASK.
-If, while implementing the task, you notice all tasks are complete, output <promise>COMPLETE</promise>
 If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>STUCK</promise> with a brief summary of what you tried and what is blocking progress.`;
 }
 
@@ -129,7 +128,6 @@ export function getFeaturePrompt(name: string, vcs: VcsType = "git") {
      * Use '${i.modifyCommit}' to add a new commit
      * Then use '${i.updatePr}' to push and update the PR
 ONLY WORK ON A SINGLE TASK.
-If all tasks in tasks.json have "passes": true, output <promise>COMPLETE</promise>
 If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>STUCK</promise> with a brief summary of what you tried and what is blocking progress.`;
 }
 
@@ -158,6 +156,22 @@ export function getIncompleteTaskTitles(taskFile: TaskFile): string[] {
     .filter((t) => !t.passes)
     .map((t) => t.title)
     .sort();
+}
+
+export function hasOpenTasks(taskFile: TaskFile): boolean {
+  return taskFile.tasks.some((t) => !t.passes);
+}
+
+export async function listOpenFeatures(): Promise<string[]> {
+  const features = await listFeatures();
+  const open: string[] = [];
+  for (const name of features) {
+    const taskFile = await readTasksFile(`.ralph/features/${name}/tasks.json`);
+    if (taskFile && hasOpenTasks(taskFile)) {
+      open.push(name);
+    }
+  }
+  return open;
 }
 
 export function getLogFilePath(featureName?: string): string {

@@ -8,7 +8,10 @@
       "Bash(bun test:*)",
       "Bash(git show-branch:*)",
       "Bash(grep:*)",
-      "Bash(bun run check-types:*)"
+      "Bash(bun run check-types:*)",
+      "Bash(bun ./cli.ts:*)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(bun build:*)"
     ]
   }
 }
