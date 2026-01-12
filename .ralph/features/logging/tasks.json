@@ -19,7 +19,7 @@
         "Autonomous loop logs all streamed chunks",
         "Log file created at .ralph/features/<name>/ralph.log"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Integrate logging into backlog streaming",

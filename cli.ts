@@ -37,6 +37,7 @@ import {
   writeConfig,
   readTasksFile,
   getIncompleteTaskTitles,
+  appendToLog,
 } from "./lib";
 import { watch, type FSWatcher } from "fs";
 
@@ -313,6 +314,7 @@ async function feature(name: string, once: boolean) {
 
   if (once) {
     console.log(`🔄 Ralph Feature: ${name} (single iteration)\n`);
+    await appendToLog(name, `\n${"=".repeat(60)}\nSession Start - Single Iteration\n${"=".repeat(60)}\n`);
     const args = ["claude", "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose", prompt];
     const proc = Bun.spawn(args, {
       stdio: ["inherit", "pipe", "inherit"],
@@ -326,6 +328,7 @@ async function feature(name: string, once: boolean) {
       const { done, value } = await reader.read();
       if (done) break;
       const text = decoder.decode(value);
+      await appendToLog(name, text);
       const { output } = formatter.parse(text);
       if (output) process.stdout.write(output);
     }
@@ -361,6 +364,8 @@ async function feature(name: string, once: boolean) {
     console.log(`${c.bold}Iteration ${i}${c.reset}`);
     console.log(`${c.dim}════════════════════════════════════════${c.reset}\n`);
 
+    await appendToLog(name, `\n${"=".repeat(60)}\nSession Start - Iteration ${i}\n${"=".repeat(60)}\n`);
+
     const args = ["claude", "--permission-mode", "bypassPermissions", "-p", "--output-format", "stream-json", "--verbose", prompt];
 
     const proc = Bun.spawn(args, {
@@ -377,6 +382,7 @@ async function feature(name: string, once: boolean) {
       if (done) break;
       const text = decoder.decode(value);
       rawOutput.push(text);
+      await appendToLog(name, text);
 
       const { output } = formatter.parse(text);
       if (output) process.stdout.write(output);
