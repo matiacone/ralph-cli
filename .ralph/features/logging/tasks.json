@@ -50,7 +50,7 @@
         "Manual test of backlog --once creates log",
         "Multiple runs append (don't overwrite)"
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }
