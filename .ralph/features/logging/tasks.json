@@ -39,7 +39,7 @@
         "Marker includes iteration number",
         "Marker is visually distinct (separator line)"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Verify logging works end-to-end",
