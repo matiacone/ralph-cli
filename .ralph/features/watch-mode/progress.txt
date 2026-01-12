@@ -1,0 +1,5 @@
+[2026-01-12T12:00:00Z] Task: Add task file reading utilities to lib.ts | Functions readTasksFile() and getIncompleteTaskTitles() already existed in lib.ts with full test coverage | Gotchas: none
+[2026-01-12T12:05:00Z] Task: Implement core watch function in cli.ts | Added watchMode() function with fs.watch, debouncing, baseline comparison, subprocess spawning, graceful shutdown | Gotchas: none
+[2026-01-12T12:05:00Z] Task: Add watch command to CLI and update help/completions | Added watch case to switch, help text, and bash completion with --stream option | Gotchas: none
+[2026-01-12T12:05:00Z] Task: Add periodic feature discovery | Added 10-second interval to rescan for new features and backlog | Gotchas: none
+[2026-01-12T13:05:00Z] Task: Test watch mode end-to-end | Verified watch starts/stops correctly, shows watched files, fixed directory existence check (Bun.file vs state.json), fixed TypeScript error with regex match | Gotchas: Bun.file().exists() only works for files not directories

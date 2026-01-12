@@ -31,9 +31,14 @@ import {
   readBacklog,
   getFeatureDir,
   listFeatures,
-  BACKLOG_PROMPT,
+  getBacklogPrompt,
   getFeaturePrompt,
+  readConfig,
+  writeConfig,
+  readTasksFile,
+  getIncompleteTaskTitles,
 } from "./lib";
+import { watch, type FSWatcher } from "fs";
 
 const BASH_COMPLETION_SCRIPT = `# Ralph CLI bash completion
 # Install: ralph completions bash >> ~/.bashrc
@@ -42,7 +47,7 @@ _ralph_completions() {
   local cur prev words cword
   _init_completion || return
 
-  local commands="setup feature backlog cancel status help completions"
+  local commands="setup feature backlog cancel status list watch help completions"
 
   case "\${words[1]}" in
     setup)
@@ -50,16 +55,19 @@ _ralph_completions() {
       return ;;
     feature)
       if [[ \${cur} == -* ]]; then
-        COMPREPLY=( \$(compgen -W "--once --stream" -- "\${cur}") )
+        COMPREPLY=( \$(compgen -W "--once" -- "\${cur}") )
       elif [[ \${cword} -eq 2 ]]; then
         local features=\$(ralph completions --list-features 2>/dev/null)
         COMPREPLY=( \$(compgen -W "\${features}" -- "\${cur}") )
       fi
       return ;;
     backlog)
-      [[ \${cur} == -* ]] && COMPREPLY=( \$(compgen -W "--once --stream --max-iterations --resume" -- "\${cur}") )
+      [[ \${cur} == -* ]] && COMPREPLY=( \$(compgen -W "--once --max-iterations --resume" -- "\${cur}") )
       return ;;
-    cancel|status|help) return ;;
+    watch)
+      [[ \${cur} == -* ]] && COMPREPLY=( \$(compgen -W "--stream" -- "\${cur}") )
+      return ;;
+    cancel|status|list|help) return ;;
     completions)
       [[ \${cword} -eq 2 ]] && COMPREPLY=( \$(compgen -W "bash" -- "\${cur}") )
       return ;;
@@ -86,6 +94,12 @@ async function setup(args: string[]) {
   console.log("🔧 Ralph Setup\n");
 
   await $`mkdir -p .ralph/features`.quiet();
+
+  const configFile = Bun.file(".ralph/config.json");
+  if (!(await configFile.exists())) {
+    await writeConfig({ vcs: "git" });
+    console.log("📝 Created .ralph/config.json (vcs: git)");
+  }
 
   const backlogFile = Bun.file(".ralph/backlog.json");
   if (!(await backlogFile.exists())) {
@@ -160,9 +174,10 @@ function parseStreamJson(text: string, buffer: string): { content: string; remai
   return { content, remaining };
 }
 
-async function feature(name: string, once: boolean, stream: boolean) {
+async function feature(name: string, once: boolean) {
   checkRepoRoot();
 
+  const config = await readConfig();
   const dir = getFeatureDir(name);
   const tasksFile = Bun.file(`${dir}/tasks.json`);
 
@@ -183,32 +198,26 @@ async function feature(name: string, once: boolean, stream: boolean) {
     await Bun.write(progressFile, "");
   }
 
-  const prompt = getFeaturePrompt(name);
+  const prompt = getFeaturePrompt(name, config.vcs);
 
   if (once) {
     console.log(`🔄 Ralph Feature: ${name} (single iteration)\n`);
-    const args = ["claude", "--permission-mode", "acceptEdits"];
-    if (stream) {
-      args.push("--output-format", "stream-json", "--verbose");
-    }
-    args.push(prompt);
+    const args = ["claude", "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose", prompt];
     const proc = Bun.spawn(args, {
-      stdio: ["inherit", stream ? "pipe" : "inherit", "inherit"],
+      stdio: ["inherit", "pipe", "inherit"],
     });
 
-    if (stream && proc.stdout) {
-      const reader = proc.stdout.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+    const reader = proc.stdout.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const text = decoder.decode(value);
-        const { content, remaining } = parseStreamJson(text, buffer);
-        buffer = remaining;
-        if (content) process.stdout.write(content);
-      }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const text = decoder.decode(value);
+      const { content, remaining } = parseStreamJson(text, buffer);
+      buffer = remaining;
+      if (content) process.stdout.write(content);
     }
 
     const code = await proc.exited;
@@ -240,14 +249,10 @@ async function feature(name: string, once: boolean, stream: boolean) {
     console.log(`Iteration ${i}`);
     console.log("========================================\n");
 
-    const args = ["claude", "--permission-mode", "acceptEdits", "-p"];
-    if (stream) {
-      args.push("--output-format", "stream-json", "--verbose");
-    }
-    args.push(prompt);
+    const args = ["claude", "--permission-mode", "bypassPermissions", "-p", "--output-format", "stream-json", "--verbose", prompt];
 
     const proc = Bun.spawn(args, {
-      stdio: ["inherit", "pipe", "pipe"],
+      stdio: ["inherit", "pipe", "inherit"],
     });
 
     const output: string[] = [];
@@ -261,13 +266,9 @@ async function feature(name: string, once: boolean, stream: boolean) {
       const text = decoder.decode(value);
       output.push(text);
 
-      if (stream) {
-        const { content, remaining } = parseStreamJson(text, buffer);
-        buffer = remaining;
-        if (content) process.stdout.write(content);
-      } else {
-        process.stdout.write(text);
-      }
+      const { content, remaining } = parseStreamJson(text, buffer);
+      buffer = remaining;
+      if (content) process.stdout.write(content);
     }
 
     const fullOutput = output.join("");
@@ -308,7 +309,6 @@ async function backlog(args: string[]) {
   let maxIterations: number | null = null;
   let resume = false;
   let once = false;
-  let stream = false;
 
   for (let i = 0; i < args.length; i++) {
     const nextArg = args[i + 1];
@@ -319,12 +319,13 @@ async function backlog(args: string[]) {
       resume = true;
     } else if (args[i] === "--once") {
       once = true;
-    } else if (args[i] === "--stream") {
-      stream = true;
     }
   }
 
   checkRepoRoot();
+
+  const config = await readConfig();
+  const backlogPrompt = getBacklogPrompt(config.vcs);
 
   const backlogData = await readBacklog();
   if (!backlogData) {
@@ -339,28 +340,22 @@ async function backlog(args: string[]) {
 
   if (once) {
     console.log("🔄 Ralph Backlog (single iteration)\n");
-    const args = ["claude", "--permission-mode", "acceptEdits"];
-    if (stream) {
-      args.push("--output-format", "stream-json", "--verbose");
-    }
-    args.push(BACKLOG_PROMPT);
+    const args = ["claude", "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose", backlogPrompt];
     const proc = Bun.spawn(args, {
-      stdio: ["inherit", stream ? "pipe" : "inherit", "inherit"],
+      stdio: ["inherit", "pipe", "inherit"],
     });
 
-    if (stream && proc.stdout) {
-      const reader = proc.stdout.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+    const reader = proc.stdout.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const text = decoder.decode(value);
-        const { content, remaining } = parseStreamJson(text, buffer);
-        buffer = remaining;
-        if (content) process.stdout.write(content);
-      }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const text = decoder.decode(value);
+      const { content, remaining } = parseStreamJson(text, buffer);
+      buffer = remaining;
+      if (content) process.stdout.write(content);
     }
 
     const code = await proc.exited;
@@ -397,14 +392,10 @@ async function backlog(args: string[]) {
     console.log(`Iteration ${i}`);
     console.log("========================================\n");
 
-    const args = ["claude", "--permission-mode", "acceptEdits", "-p"];
-    if (stream) {
-      args.push("--output-format", "stream-json", "--verbose");
-    }
-    args.push(BACKLOG_PROMPT);
+    const args = ["claude", "--permission-mode", "bypassPermissions", "-p", "--output-format", "stream-json", "--verbose", backlogPrompt];
 
     const proc = Bun.spawn(args, {
-      stdio: ["inherit", "pipe", "pipe"],
+      stdio: ["inherit", "pipe", "inherit"],
     });
 
     const output: string[] = [];
@@ -418,13 +409,9 @@ async function backlog(args: string[]) {
       const text = decoder.decode(value);
       output.push(text);
 
-      if (stream) {
-        const { content, remaining } = parseStreamJson(text, buffer);
-        buffer = remaining;
-        if (content) process.stdout.write(content);
-      } else {
-        process.stdout.write(text);
-      }
+      const { content, remaining } = parseStreamJson(text, buffer);
+      buffer = remaining;
+      if (content) process.stdout.write(content);
     }
 
     const fullOutput = output.join("");
@@ -459,6 +446,201 @@ async function backlog(args: string[]) {
   await writeState({ ...state, iteration: max, status: "max_iterations_reached" });
   await notify("Ralph Max Iterations", `Reached ${max} iterations`);
   process.exit(1);
+}
+
+async function watchMode(stream: boolean) {
+  checkRepoRoot();
+
+  const stateFile = Bun.file(".ralph/state.json");
+  if (!(await stateFile.exists())) {
+    console.error("❌ No .ralph directory found. Run 'ralph setup' first.");
+    process.exit(1);
+  }
+
+  // Discover all watch targets
+  const watchTargets: Map<string, string[]> = new Map();
+  const watchers: FSWatcher[] = [];
+  let isRunning = false;
+
+  const backlogPath = ".ralph/backlog.json";
+  const backlogFile = Bun.file(backlogPath);
+  if (await backlogFile.exists()) {
+    const taskFile = await readTasksFile(backlogPath);
+    if (taskFile) {
+      watchTargets.set(backlogPath, getIncompleteTaskTitles(taskFile));
+    }
+  }
+
+  const features = await listFeatures();
+  for (const name of features) {
+    const tasksPath = `.ralph/features/${name}/tasks.json`;
+    const taskFile = await readTasksFile(tasksPath);
+    if (taskFile) {
+      watchTargets.set(tasksPath, getIncompleteTaskTitles(taskFile));
+    }
+  }
+
+  if (watchTargets.size === 0) {
+    console.error("❌ No files to watch. Create a backlog or feature first.");
+    process.exit(1);
+  }
+
+  console.log("👀 Ralph Watch Mode\n");
+  console.log("Watching:");
+  for (const path of watchTargets.keys()) {
+    console.log(`  - ${path}`);
+  }
+  console.log("\nPress Ctrl+C to stop\n");
+
+  // Debounce timers per file
+  const debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+  async function checkForNewTasks(changedPath: string) {
+    if (isRunning) return;
+
+    const taskFile = await readTasksFile(changedPath);
+    if (!taskFile) {
+      // File was deleted or invalid - remove from watch targets
+      watchTargets.delete(changedPath);
+      return;
+    }
+
+    const newTitles = getIncompleteTaskTitles(taskFile);
+    const oldTitles = watchTargets.get(changedPath) || [];
+
+    // Find tasks that are in newTitles but not in oldTitles
+    const addedTasks = newTitles.filter((t) => !oldTitles.includes(t));
+
+    if (addedTasks.length > 0) {
+      console.log(`\n📝 New tasks detected in ${changedPath}:`);
+      for (const task of addedTasks) {
+        console.log(`  + ${task}`);
+      }
+
+      isRunning = true;
+
+      // Determine which command to run
+      let command: string[];
+      if (changedPath === backlogPath) {
+        command = ["ralph", "backlog"];
+      } else {
+        // Extract feature name from path like .ralph/features/<name>/tasks.json
+        const match = changedPath.match(/\.ralph\/features\/([^/]+)\/tasks\.json/);
+        if (!match || !match[1]) {
+          console.error(`❌ Could not parse feature name from ${changedPath}`);
+          isRunning = false;
+          watchTargets.set(changedPath, newTitles);
+          return;
+        }
+        command = ["ralph", "feature", match[1]];
+      }
+
+      if (stream) {
+        command.push("--stream");
+      }
+
+      console.log(`\n🚀 Running: ${command.join(" ")}\n`);
+
+      const proc = Bun.spawn(command, {
+        stdio: ["inherit", "inherit", "inherit"],
+      });
+
+      await proc.exited;
+
+      // Update baseline after run completes
+      const updatedTaskFile = await readTasksFile(changedPath);
+      if (updatedTaskFile) {
+        watchTargets.set(changedPath, getIncompleteTaskTitles(updatedTaskFile));
+      }
+
+      isRunning = false;
+      console.log("\n👀 Watching for new tasks...\n");
+    } else {
+      // No new tasks, just update baseline silently
+      watchTargets.set(changedPath, newTitles);
+    }
+  }
+
+  function setupWatcher(filePath: string) {
+    try {
+      const watcher = watch(filePath, () => {
+        // Clear existing debounce timer
+        const existingTimer = debounceTimers.get(filePath);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+        }
+
+        // Set new debounce timer (1 second)
+        const timer = setTimeout(() => {
+          checkForNewTasks(filePath);
+          debounceTimers.delete(filePath);
+        }, 1000);
+
+        debounceTimers.set(filePath, timer);
+      });
+
+      watchers.push(watcher);
+      return watcher;
+    } catch {
+      console.error(`⚠️  Could not watch ${filePath}`);
+      return null;
+    }
+  }
+
+  // Set up watchers for all targets
+  for (const path of watchTargets.keys()) {
+    setupWatcher(path);
+  }
+
+  // Periodic rescan for new features (every 10 seconds)
+  const rescanInterval = setInterval(async () => {
+    if (isRunning) return;
+
+    const currentFeatures = await listFeatures();
+    for (const name of currentFeatures) {
+      const tasksPath = `.ralph/features/${name}/tasks.json`;
+      if (!watchTargets.has(tasksPath)) {
+        const taskFile = await readTasksFile(tasksPath);
+        if (taskFile) {
+          console.log(`📁 New feature discovered: ${name}`);
+          watchTargets.set(tasksPath, getIncompleteTaskTitles(taskFile));
+          setupWatcher(tasksPath);
+        }
+      }
+    }
+
+    // Check if backlog was created
+    if (!watchTargets.has(backlogPath)) {
+      const backlog = Bun.file(backlogPath);
+      if (await backlog.exists()) {
+        const taskFile = await readTasksFile(backlogPath);
+        if (taskFile) {
+          console.log("📁 Backlog discovered");
+          watchTargets.set(backlogPath, getIncompleteTaskTitles(taskFile));
+          setupWatcher(backlogPath);
+        }
+      }
+    }
+  }, 10000);
+
+  // Handle graceful shutdown
+  const cleanup = () => {
+    console.log("\n🛑 Stopping watch mode...");
+    clearInterval(rescanInterval);
+    for (const timer of debounceTimers.values()) {
+      clearTimeout(timer);
+    }
+    for (const watcher of watchers) {
+      watcher.close();
+    }
+    process.exit(0);
+  };
+
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
+
+  // Keep the process running
+  await new Promise(() => {});
 }
 
 async function cancel() {
@@ -511,6 +693,93 @@ async function status() {
   }
 }
 
+interface Task {
+  title: string;
+  description?: string;
+  acceptance?: string[];
+  branch?: string;
+  passes: boolean;
+}
+
+async function list() {
+  checkRepoRoot();
+
+  // Status section
+  const state = await readState();
+  console.log("┌─────────────────────────────────────────┐");
+  console.log("│              Ralph Status               │");
+  console.log("└─────────────────────────────────────────┘");
+
+  if (state) {
+    const statusIcon =
+      state.status === "running" ? "🟢" :
+      state.status === "completed" ? "✅" :
+      state.status === "error" || state.status === "stuck" ? "🔴" :
+      "⚪";
+    console.log(`  ${statusIcon} ${state.status}`);
+    if (state.status === "running" && state.feature) {
+      console.log(`     Working on: ${state.feature}`);
+    }
+    console.log(`     Iteration: ${state.iteration}/${state.maxIterations}`);
+  } else {
+    console.log("  ⚪ Not initialized (run 'ralph setup')");
+  }
+
+  // Backlog section
+  console.log("\n┌─────────────────────────────────────────┐");
+  console.log("│              Backlog Tasks              │");
+  console.log("└─────────────────────────────────────────┘");
+
+  const backlogFile = Bun.file(".ralph/backlog.json");
+  if (await backlogFile.exists()) {
+    const backlogData = await backlogFile.json();
+    const tasks: Task[] = backlogData.tasks ?? [];
+    const openTasks = tasks.filter((t) => !t.passes);
+    const completedCount = tasks.length - openTasks.length;
+
+    if (openTasks.length === 0) {
+      console.log("  ✅ All tasks complete!");
+    } else {
+      for (const task of openTasks) {
+        console.log(`  ○ ${task.title}`);
+        if (task.branch) {
+          console.log(`    └─ branch: ${task.branch}`);
+        }
+      }
+    }
+    console.log(`\n  ${completedCount}/${tasks.length} tasks completed`);
+  } else {
+    console.log("  No backlog found");
+  }
+
+  // Features section
+  console.log("\n┌─────────────────────────────────────────┐");
+  console.log("│               Features                  │");
+  console.log("└─────────────────────────────────────────┘");
+
+  const featureNames = await listFeatures();
+  if (featureNames.length === 0) {
+    console.log("  No features found");
+  } else {
+    for (const name of featureNames) {
+      const tasksFile = Bun.file(`.ralph/features/${name}/tasks.json`);
+      if (await tasksFile.exists()) {
+        const data = await tasksFile.json();
+        const tasks: Task[] = data.tasks ?? [];
+        const openTasks = tasks.filter((t) => !t.passes);
+        const isActive = state?.feature === name && state?.status === "running";
+
+        const icon = isActive ? "🔄" : openTasks.length === 0 ? "✅" : "📋";
+        console.log(`  ${icon} ${name} (${tasks.length - openTasks.length}/${tasks.length} done)`);
+
+        for (const task of openTasks) {
+          console.log(`     ○ ${task.title}`);
+        }
+      }
+    }
+  }
+}
+
 async function completions(args: string[]) {
   if (args.includes("--list-features")) {
     const features = await listFeatures();
@@ -539,17 +808,20 @@ Commands:
 
   feature <name>     Run a feature plan from .ralph/features/<name>/
                      --once                Run single iteration only
-                     --stream              Stream tokens in realtime
 
   backlog            Run backlog tasks from .ralph/backlog.json
                      --once                Run single iteration only
-                     --stream              Stream tokens in realtime
                      --max-iterations <n>  Override max iterations
                      --resume              Resume from last iteration
 
   cancel             Stop running session
 
   status             Show current state
+
+  list               List open backlog tasks, features, and status
+
+  watch              Watch for new tasks and auto-run ralph
+                     --stream              Stream Claude output in realtime
 
   completions bash   Output bash completion script
                      Install: ralph completions bash >> ~/.bashrc
@@ -577,8 +849,7 @@ switch (command) {
       process.exit(1);
     }
     const once = args.includes("--once");
-    const stream = args.includes("--stream");
-    await feature(name, once, stream);
+    await feature(name, once);
     break;
   }
   case "backlog":
@@ -590,6 +861,14 @@ switch (command) {
   case "status":
     await status();
     break;
+  case "list":
+    await list();
+    break;
+  case "watch": {
+    const stream = args.includes("--stream");
+    await watchMode(stream);
+    break;
+  }
   case "completions":
     await completions(args);
     break;

@@ -1,0 +1,13 @@
+{
+  "tasks": [
+    {
+      "title": "Example task - replace with your own",
+      "description": "Why we need this and enough context to start.",
+      "acceptance": [
+        "Specific, testable criteria"
+      ],
+      "branch": "feature/example",
+      "passes": false
+    }
+  ]
+}

@@ -6,11 +6,13 @@ import {
   getStateFile,
   getFeatureDir,
   getFeaturePrompt,
+  getBacklogPrompt,
   readState,
   writeState,
   readBacklog,
   listFeatures,
-  BACKLOG_PROMPT,
+  readTasksFile,
+  getIncompleteTaskTitles,
 } from "./lib";
 
 describe("getStateFile", () => {
@@ -45,26 +47,50 @@ describe("getFeaturePrompt", () => {
     expect(prompt).toContain("<promise>COMPLETE</promise>");
     expect(prompt).toContain("<promise>STUCK</promise>");
   });
+
+  test("uses git commands by default", () => {
+    const prompt = getFeaturePrompt("test");
+    expect(prompt).toContain("git checkout -b");
+    expect(prompt).toContain("git push");
+    expect(prompt).toContain("gh pr create");
+  });
+
+  test("uses graphite commands when vcs is graphite", () => {
+    const prompt = getFeaturePrompt("test", "graphite");
+    expect(prompt).toContain("gt create");
+    expect(prompt).toContain("gt modify");
+    expect(prompt).toContain("gt submit");
+  });
 });
 
-describe("BACKLOG_PROMPT", () => {
+describe("getBacklogPrompt", () => {
   test("contains backlog file references", () => {
-    expect(BACKLOG_PROMPT).toContain("@.ralph/backlog.json");
-    expect(BACKLOG_PROMPT).toContain("@.ralph/progress.txt");
+    const prompt = getBacklogPrompt();
+    expect(prompt).toContain("@.ralph/backlog.json");
+    expect(prompt).toContain("@.ralph/progress.txt");
   });
 
   test("contains required instructions", () => {
-    expect(BACKLOG_PROMPT).toContain("bun run lint:fix");
-    expect(BACKLOG_PROMPT).toContain("bun run check-types");
-    expect(BACKLOG_PROMPT).toContain("bun run test");
-    expect(BACKLOG_PROMPT).toContain("<promise>COMPLETE</promise>");
-    expect(BACKLOG_PROMPT).toContain("<promise>STUCK</promise>");
+    const prompt = getBacklogPrompt();
+    expect(prompt).toContain("bun run lint:fix");
+    expect(prompt).toContain("bun run check-types");
+    expect(prompt).toContain("bun run test");
+    expect(prompt).toContain("<promise>COMPLETE</promise>");
+    expect(prompt).toContain("<promise>STUCK</promise>");
   });
 
-  test("mentions git workflow", () => {
-    expect(BACKLOG_PROMPT).toContain("gt create");
-    expect(BACKLOG_PROMPT).toContain("gt modify");
-    expect(BACKLOG_PROMPT).toContain("gt submit");
+  test("uses git commands by default", () => {
+    const prompt = getBacklogPrompt();
+    expect(prompt).toContain("git checkout -b");
+    expect(prompt).toContain("git push");
+    expect(prompt).toContain("gh pr create");
+  });
+
+  test("uses graphite commands when vcs is graphite", () => {
+    const prompt = getBacklogPrompt("graphite");
+    expect(prompt).toContain("gt create");
+    expect(prompt).toContain("gt modify");
+    expect(prompt).toContain("gt submit");
   });
 });
 
@@ -156,6 +182,72 @@ describe("file operations", () => {
 
       const result = await listFeatures();
       expect(result).toEqual(["complete"]);
+    });
+  });
+
+  describe("readTasksFile", () => {
+    test("returns null when file does not exist", async () => {
+      const result = await readTasksFile(".ralph/nonexistent.json");
+      expect(result).toBeNull();
+    });
+
+    test("returns parsed JSON when file exists", async () => {
+      const tasks = {
+        tasks: [
+          { title: "Task 1", passes: false },
+          { title: "Task 2", passes: true },
+        ],
+      };
+      await Bun.write(".ralph/backlog.json", JSON.stringify(tasks));
+
+      const result = await readTasksFile(".ralph/backlog.json");
+      expect(result).toEqual(tasks);
+    });
+
+    test("returns null for invalid JSON", async () => {
+      await Bun.write(".ralph/backlog.json", "not valid json");
+
+      const result = await readTasksFile(".ralph/backlog.json");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("getIncompleteTaskTitles", () => {
+    test("returns empty array when all tasks complete", () => {
+      const taskFile = {
+        tasks: [
+          { title: "Task 1", passes: true },
+          { title: "Task 2", passes: true },
+        ],
+      };
+
+      const result = getIncompleteTaskTitles(taskFile);
+      expect(result).toEqual([]);
+    });
+
+    test("returns incomplete task titles sorted", () => {
+      const taskFile = {
+        tasks: [
+          { title: "Zebra task", passes: false },
+          { title: "Alpha task", passes: true },
+          { title: "Beta task", passes: false },
+        ],
+      };
+
+      const result = getIncompleteTaskTitles(taskFile);
+      expect(result).toEqual(["Beta task", "Zebra task"]);
+    });
+
+    test("returns all titles when none complete", () => {
+      const taskFile = {
+        tasks: [
+          { title: "First", passes: false },
+          { title: "Second", passes: false },
+        ],
+      };
+
+      const result = getIncompleteTaskTitles(taskFile);
+      expect(result).toEqual(["First", "Second"]);
     });
   });
 });

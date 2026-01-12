@@ -1,0 +1,60 @@
+{
+  "tasks": [
+    {
+      "title": "Add task file reading utilities to lib.ts",
+      "description": "The watch command needs to compare task states before and after file changes to detect when new tasks are added. We need utilities to read task files and extract incomplete task titles for comparison.",
+      "acceptance": [
+        "lib.ts exports getIncompleteTaskTitles() that returns sorted array of incomplete task titles",
+        "lib.ts exports readTasksFile() that safely reads and parses a task JSON file"
+      ],
+      "passes": true
+    },
+    {
+      "title": "Implement core watch function in cli.ts",
+      "description": "The main watch functionality needs to monitor both backlog.json and all feature task files, detect new tasks via file system watching with debouncing, and trigger the appropriate ralph command when new tasks are found.",
+      "acceptance": [
+        "watch() function discovers all watch targets (backlog + features)",
+        "Uses fs.watch with 1-second debounce",
+        "Maintains baseline of incomplete tasks per file",
+        "Detects new tasks by comparing to baseline",
+        "Spawns 'ralph backlog' or 'ralph feature <name>' as subprocess",
+        "Blocks during run, ignores changes, updates baseline after",
+        "Handles SIGINT for graceful shutdown"
+      ],
+      "passes": true
+    },
+    {
+      "title": "Add watch command to CLI and update help/completions",
+      "description": "The watch command needs to be wired up to the CLI argument parser with proper help text and bash completion support.",
+      "acceptance": [
+        "ralph watch command invokes the watch function",
+        "--stream flag is supported and passed to subprocess",
+        "Help text documents the watch command",
+        "Bash completions include watch with --stream option"
+      ],
+      "passes": true
+    },
+    {
+      "title": "Add periodic feature discovery",
+      "description": "New features may be created while watch is running. The watcher should periodically scan for new feature directories and start watching them.",
+      "acceptance": [
+        "Every 10 seconds, rescans .ralph/features/ for new task files",
+        "Adds watchers for newly discovered features",
+        "Removes watchers for deleted features"
+      ],
+      "passes": true
+    },
+    {
+      "title": "Test watch mode end-to-end",
+      "description": "Verify the watch functionality works correctly by testing the key scenarios manually.",
+      "acceptance": [
+        "ralph watch starts and shows watched files",
+        "Adding task to backlog.json triggers ralph backlog run",
+        "Adding task to feature tasks.json triggers ralph feature run",
+        "Ctrl+C stops watching cleanly",
+        "--stream flag produces streamed output"
+      ],
+      "passes": true
+    }
+  ]
+}

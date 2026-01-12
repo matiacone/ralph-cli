@@ -1,5 +1,42 @@
 const NTFY_URL = process.env.NTFY_URL;
 
+export type VcsType = "git" | "graphite";
+
+export interface RalphConfig {
+  vcs: VcsType;
+}
+
+const VCS_INSTRUCTIONS = {
+  git: {
+    createBranch: `git checkout -b <branch-name> && git add -A && git commit -m "<message>"`,
+    submit: `git push -u origin HEAD && gh pr create --fill`,
+    modifyCommit: `git add -A && git commit -m "<message>"`,
+    updatePr: `git push`,
+  },
+  graphite: {
+    createBranch: `gt create --all -m "<message>"`,
+    submit: `gt submit --no-interactive`,
+    modifyCommit: `gt modify --all -c -m "<message>"`,
+    updatePr: `gt submit --no-interactive`,
+  },
+};
+
+export function getConfigFile() {
+  return ".ralph/config.json";
+}
+
+export async function readConfig(): Promise<RalphConfig> {
+  const file = Bun.file(getConfigFile());
+  if (!(await file.exists())) {
+    return { vcs: "git" };
+  }
+  return file.json();
+}
+
+export async function writeConfig(config: RalphConfig) {
+  await Bun.write(getConfigFile(), JSON.stringify(config, null, 2));
+}
+
 export async function notify(title: string, message: string, priority = "default") {
   if (!NTFY_URL) return;
   await fetch(NTFY_URL, {
@@ -50,7 +87,9 @@ export async function listFeatures(): Promise<string[]> {
   }
 }
 
-export const BACKLOG_PROMPT = `@.ralph/backlog.json @.ralph/progress.txt
+export function getBacklogPrompt(vcs: VcsType = "git") {
+  const i = VCS_INSTRUCTIONS[vcs];
+  return `@.ralph/backlog.json @.ralph/progress.txt
 1. Find the highest-priority task to work on and work only on that task.
 This should be the one YOU decide has the highest priority - not necessarily the first in the array.
 2. Check that the code is linted via bun run lint:fix, types check via bun run check-types, and tests pass via bun run test.
@@ -60,20 +99,23 @@ This should be the one YOU decide has the highest priority - not necessarily the
 5. Make a git commit and submit PR:
    - Check the current branch with 'git branch --show-current'
    - If you are NOT on the task's branch:
-     * Use 'gt create --all -m "<message>"' to create a new branch
-     * Then use 'gt submit --no-interactive' to push and create a PR
+     * Use '${i.createBranch}' to create a new branch
+     * Then use '${i.submit}' to push and create a PR
    - If you are already on the task's branch:
-     * Use 'gt modify --all -c -m "<message>"' to add a new commit
-     * Then use 'gt submit --no-interactive' to push and update the PR
+     * Use '${i.modifyCommit}' to add a new commit
+     * Then use '${i.updatePr}' to push and update the PR
 ONLY WORK ON A SINGLE TASK.
 If, while implementing the task, you notice all tasks are complete, output <promise>COMPLETE</promise>
 If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>STUCK</promise> with a brief summary of what you tried and what is blocking progress.`;
+}
 
-export function getFeaturePrompt(name: string) {
+export function getFeaturePrompt(name: string, vcs: VcsType = "git") {
   const dir = getFeatureDir(name);
+  const i = VCS_INSTRUCTIONS[vcs];
   return `@${dir}/plan.md @${dir}/tasks.json @${dir}/progress.txt
 1. FIRST: Read the Branch field at the top of plan.md. You MUST use this branch for all commits.
 2. Review plan.md for context, then find the highest-priority incomplete task in tasks.json.
+   This should be the one YOU decide has the highest priority - not necessarily the first in the array.
 3. Implement the task, ensuring code is linted (bun run lint:fix), types check (bun run check-types), and tests pass (bun run test).
 4. Mark the task complete in tasks.json by setting "passes": true.
 5. Append a concise progress entry to ${dir}/progress.txt:
@@ -81,12 +123,39 @@ export function getFeaturePrompt(name: string) {
 6. Make a git commit using the branch from plan.md:
    - Check the current branch with 'git branch --show-current'
    - If you are NOT on the branch specified in plan.md:
-     * Use 'gt create --all -m "<message>"' to create the branch with the exact name from plan.md
-     * Then use 'gt submit --no-interactive' to push and create a PR
+     * Use '${i.createBranch}' to create the branch with the exact name from plan.md
+     * Then use '${i.submit}' to push and create a PR
    - If you are already on the correct branch:
-     * Use 'gt modify --all -c -m "<message>"' to add a new commit
-     * Then use 'gt submit --no-interactive' to push and update the PR
+     * Use '${i.modifyCommit}' to add a new commit
+     * Then use '${i.updatePr}' to push and update the PR
 ONLY WORK ON A SINGLE TASK.
 If all tasks in tasks.json have "passes": true, output <promise>COMPLETE</promise>
 If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>STUCK</promise> with a brief summary of what you tried and what is blocking progress.`;
+}
+
+export interface TaskFile {
+  tasks: Array<{
+    title: string;
+    description?: string;
+    acceptance?: string[];
+    branch?: string;
+    passes: boolean;
+  }>;
+}
+
+export async function readTasksFile(path: string): Promise<TaskFile | null> {
+  const file = Bun.file(path);
+  if (!(await file.exists())) return null;
+  try {
+    return await file.json();
+  } catch {
+    return null;
+  }
+}
+
+export function getIncompleteTaskTitles(taskFile: TaskFile): string[] {
+  return taskFile.tasks
+    .filter((t) => !t.passes)
+    .map((t) => t.title)
+    .sort();
 }

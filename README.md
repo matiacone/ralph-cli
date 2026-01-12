@@ -43,7 +43,6 @@ Work through tasks in `.ralph/backlog.json`:
 ```bash
 ralph backlog              # Run loop until complete or max iterations
 ralph backlog --once       # Single iteration
-ralph backlog --stream     # Stream output in realtime
 ralph backlog --resume     # Resume from last iteration
 ralph backlog --max-iterations 100
 ```
@@ -55,7 +54,6 @@ Run a specific feature plan from `.ralph/features/<name>/`:
 ```bash
 ralph feature <name>
 ralph feature <name> --once
-ralph feature <name> --stream
 ```
 
 Feature directories contain:
