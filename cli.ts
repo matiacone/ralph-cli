@@ -6,10 +6,10 @@ async function autoUpdate() {
   const scriptDir = import.meta.dir;
   try {
     await $`git -C ${scriptDir} fetch --quiet`.quiet();
-    const local = await $`git -C ${scriptDir} rev-parse HEAD`.quiet().text();
-    const remote = await $`git -C ${scriptDir} rev-parse origin/master`.quiet().text();
+    // Count commits on remote that we don't have locally (i.e., we're behind)
+    const behind = await $`git -C ${scriptDir} rev-list HEAD..origin/master --count`.quiet().text();
 
-    if (local.trim() !== remote.trim()) {
+    if (parseInt(behind.trim(), 10) > 0) {
       console.log("🔄 Updating Ralph...");
       await $`git -C ${scriptDir} pull --quiet`.quiet();
       console.log("✅ Updated. Restarting...\n");
