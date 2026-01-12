@@ -1,0 +1,1 @@
+[2026-01-12T10:00:00Z] Task: Add logging helper functions to lib.ts | Added getLogFilePath() and appendToLog() functions to lib.ts. getLogFilePath returns feature-specific or backlog log paths, appendToLog writes timestamped entries with proper append behavior. | Gotchas: Bun.write doesn't have an append option, so we read existing content and concatenate before writing.

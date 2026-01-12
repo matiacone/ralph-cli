@@ -159,3 +159,23 @@ export function getIncompleteTaskTitles(taskFile: TaskFile): string[] {
     .map((t) => t.title)
     .sort();
 }
+
+export function getLogFilePath(featureName?: string): string {
+  if (featureName) {
+    return `${getFeatureDir(featureName)}/ralph.log`;
+  }
+  return ".ralph/ralph.log";
+}
+
+export async function appendToLog(featureName: string | undefined, chunk: string): Promise<void> {
+  const logPath = getLogFilePath(featureName);
+  const timestamp = new Date().toISOString();
+  const entry = `[${timestamp}] ${chunk}`;
+
+  const file = Bun.file(logPath);
+  let existing = "";
+  if (await file.exists()) {
+    existing = await file.text();
+  }
+  await Bun.write(logPath, existing + entry);
+}
