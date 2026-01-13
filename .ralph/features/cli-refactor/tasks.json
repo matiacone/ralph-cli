@@ -31,7 +31,7 @@
         "Each command file exports a single async function",
         "feature.ts and backlog.ts use the runner from src/runner.ts"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Refactor cli.ts to thin entry point",
