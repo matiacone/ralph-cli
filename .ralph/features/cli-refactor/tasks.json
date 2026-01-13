@@ -20,7 +20,7 @@
         "Runner checks for task completion and STUCK signals",
         "Exports are typed and documented"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Extract command handlers to src/commands/",

@@ -5,7 +5,6 @@ import { autoUpdate } from "./src/auto-update";
 await autoUpdate();
 import { $ } from "bun";
 import {
-  notify,
   checkRepoRoot,
   readState,
   writeState,
@@ -20,11 +19,10 @@ import {
   readTasksFile,
   getIncompleteTaskTitles,
   hasOpenTasks,
-  appendToLog,
 } from "./lib";
 import { watch, type FSWatcher } from "fs";
 import { c } from "./src/colors";
-import { StreamFormatter } from "./src/formatter";
+import { runSingleIteration, runLoop } from "./src/runner";
 
 const BASH_COMPLETION_SCRIPT = `# Ralph CLI bash completion
 # Install: ralph completions bash >> ~/.bashrc
@@ -162,123 +160,23 @@ async function feature(name: string, once: boolean) {
   }
 
   const prompt = getFeaturePrompt(name, config.vcs);
+  const runnerConfig = {
+    prompt,
+    featureName: name,
+    tasksFilePath: `${dir}/tasks.json`,
+    label: `Feature: ${name}`,
+  };
 
   if (once) {
-    console.log(`🔄 Ralph Feature: ${name} (single iteration)\n`);
-    await appendToLog(name, `\n${"=".repeat(60)}\nSession Start - Single Iteration\n${"=".repeat(60)}\n`);
-    const args = ["claude", "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose", prompt];
-    const proc = Bun.spawn(args, {
-      stdio: ["inherit", "pipe", "inherit"],
-    });
-
-    const reader = proc.stdout.getReader();
-    const decoder = new TextDecoder();
-    const formatter = new StreamFormatter();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const text = decoder.decode(value);
-      await appendToLog(name, text);
-      const { output } = formatter.parse(text);
-      if (output) process.stdout.write(output);
-    }
-    const remaining = formatter.flush();
-    if (remaining) process.stdout.write(remaining);
-
-    const code = await proc.exited;
-    if (code !== 0) {
-      console.error(`\n❌ Claude exited with code ${code}`);
-      process.exit(code);
-    }
-    console.log("\n✅ Iteration complete");
+    await runSingleIteration(runnerConfig);
     return;
   }
 
-  console.log(`🤖 Ralph Feature: ${name} - Autonomous Loop\n`);
-
-  const state = await readState();
-  if (!state) {
-    console.error("❌ No state found. Run 'ralph setup' first.");
-    process.exit(1);
-  }
-
-  const max = state.maxIterations;
-  console.log(`Plan: ${dir}/plan.md`);
-  console.log(`Max iterations: ${max}\n`);
-  console.log("Press Ctrl+C to cancel\n");
-
-  await writeState({ ...state, status: "running", feature: name });
-
-  for (let i = 1; i <= max; i++) {
-    console.log(`${c.dim}════════════════════════════════════════${c.reset}`);
-    console.log(`${c.bold}Iteration ${i}${c.reset}`);
-    console.log(`${c.dim}════════════════════════════════════════${c.reset}\n`);
-
-    await appendToLog(name, `\n${"=".repeat(60)}\nSession Start - Iteration ${i}\n${"=".repeat(60)}\n`);
-
-    const args = ["claude", "--dangerously-skip-permissions", "-p", "--output-format", "stream-json", "--verbose", prompt];
-
-    const proc = Bun.spawn(args, {
-      stdio: ["inherit", "pipe", "inherit"],
-    });
-
-    const rawOutput: string[] = [];
-    const reader = proc.stdout.getReader();
-    const decoder = new TextDecoder();
-    const formatter = new StreamFormatter();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const text = decoder.decode(value);
-      rawOutput.push(text);
-      await appendToLog(name, text);
-
-      const { output } = formatter.parse(text);
-      if (output) process.stdout.write(output);
-    }
-    const remaining = formatter.flush();
-    if (remaining) process.stdout.write(remaining);
-
-    const code = await proc.exited;
-    const assistantText = formatter.getAssistantText();
-    await writeState({ ...state, iteration: i, status: "running", feature: name });
-
-    if (code !== 0) {
-      console.error(`\n❌ Claude exited with code ${code}`);
-      await writeState({ ...state, iteration: i, status: "error", feature: name });
-      await notify("Ralph Error", `Claude exited with code ${code} after ${i} iterations`, "high");
-      process.exit(code);
-    }
-
-    // Check if all tasks are complete by reading the JSON file
-    const taskFile = await readTasksFile(`${dir}/tasks.json`);
-    if (taskFile && !hasOpenTasks(taskFile)) {
-      console.log("\n✅ Feature complete!");
-      await writeState({ ...state, iteration: i, status: "completed", feature: name });
-      await notify("Ralph Complete", `Feature '${name}' complete after ${i} iterations`);
-      process.exit(0);
-    }
-
-    if (assistantText.includes("<promise>STUCK</promise>")) {
-      console.log("\n🛑 Claude is stuck");
-      await writeState({ ...state, iteration: i, status: "stuck", feature: name });
-      await notify("Ralph Stuck", `Exhausted options after ${i} iterations`, "high");
-      process.exit(2);
-    }
-
-    console.log(`\n✓ Iteration ${i} complete\n`);
-  }
-
-  console.log(`\n⚠️  Max iterations (${max}) reached`);
-  await writeState({ ...state, iteration: max, status: "max_iterations_reached", feature: name });
-  await notify("Ralph Max Iterations", `Reached ${max} iterations`);
-  process.exit(1);
+  await runLoop(runnerConfig);
 }
 
 async function backlog(args: string[]) {
-  let maxIterations: number | null = null;
+  let maxIterations: number | undefined;
   let resume = false;
   let once = false;
 
@@ -310,123 +208,26 @@ async function backlog(args: string[]) {
     await Bun.write(progressFile, "");
   }
 
+  const runnerConfig = {
+    prompt: backlogPrompt,
+    featureName: undefined,
+    tasksFilePath: ".ralph/backlog.json",
+    label: "Backlog",
+  };
+
   if (once) {
-    console.log("🔄 Ralph Backlog (single iteration)\n");
-    await appendToLog(undefined, `\n${"=".repeat(60)}\nSession Start - Single Iteration\n${"=".repeat(60)}\n`);
-    const args = ["claude", "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose", backlogPrompt];
-    const proc = Bun.spawn(args, {
-      stdio: ["inherit", "pipe", "inherit"],
-    });
-
-    const reader = proc.stdout.getReader();
-    const decoder = new TextDecoder();
-    const formatter = new StreamFormatter();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const text = decoder.decode(value);
-      await appendToLog(undefined, text);
-      const { output } = formatter.parse(text);
-      if (output) process.stdout.write(output);
-    }
-    const remaining = formatter.flush();
-    if (remaining) process.stdout.write(remaining);
-
-    const code = await proc.exited;
-    if (code !== 0) {
-      console.error(`\n❌ Claude exited with code ${code}`);
-      process.exit(code);
-    }
-    console.log("\n✅ Iteration complete");
+    await runSingleIteration(runnerConfig);
     return;
   }
 
-  console.log("🤖 Ralph Backlog - Autonomous Loop\n");
-
   const state = await readState();
-  if (!state) {
-    console.error("❌ No state found. Run 'ralph setup' first.");
-    process.exit(1);
-  }
+  const startIteration = resume && state ? state.iteration : 0;
 
-  const max = maxIterations ?? state.maxIterations;
-  let current = resume ? state.iteration : 0;
-
-  if (resume) console.log(`📍 Resuming from iteration ${current}\n`);
-
-  console.log(`Backlog: ${backlogData.path}`);
-  console.log(`Max iterations: ${max}`);
-  console.log(`Starting from: ${current + 1}\n`);
-  console.log("Press Ctrl+C to cancel\n");
-
-  await writeState({ ...state, status: "running" });
-
-  for (let i = current + 1; i <= max; i++) {
-    console.log(`${c.dim}════════════════════════════════════════${c.reset}`);
-    console.log(`${c.bold}Iteration ${i}${c.reset}`);
-    console.log(`${c.dim}════════════════════════════════════════${c.reset}\n`);
-
-    await appendToLog(undefined, `\n${"=".repeat(60)}\nSession Start - Iteration ${i}\n${"=".repeat(60)}\n`);
-
-    const args = ["claude", "--dangerously-skip-permissions", "-p", "--output-format", "stream-json", "--verbose", backlogPrompt];
-
-    const proc = Bun.spawn(args, {
-      stdio: ["inherit", "pipe", "inherit"],
-    });
-
-    const rawOutput: string[] = [];
-    const reader = proc.stdout.getReader();
-    const decoder = new TextDecoder();
-    const formatter = new StreamFormatter();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const text = decoder.decode(value);
-      rawOutput.push(text);
-      await appendToLog(undefined, text);
-
-      const { output } = formatter.parse(text);
-      if (output) process.stdout.write(output);
-    }
-    const remaining = formatter.flush();
-    if (remaining) process.stdout.write(remaining);
-
-    const code = await proc.exited;
-    const assistantText = formatter.getAssistantText();
-    await writeState({ ...state, iteration: i, status: "running" });
-
-    if (code !== 0) {
-      console.error(`\n❌ Claude exited with code ${code}`);
-      await writeState({ ...state, iteration: i, status: "error" });
-      await notify("Ralph Error", `Claude exited with code ${code} after ${i} iterations`, "high");
-      process.exit(code);
-    }
-
-    // Check if all tasks are complete by reading the JSON file
-    const backlogTaskFile = await readTasksFile(".ralph/backlog.json");
-    if (backlogTaskFile && !hasOpenTasks(backlogTaskFile)) {
-      console.log("\n✅ All tasks complete!");
-      await writeState({ ...state, iteration: i, status: "completed" });
-      await notify("Ralph Complete", `All tasks complete after ${i} iterations`);
-      process.exit(0);
-    }
-
-    if (assistantText.includes("<promise>STUCK</promise>")) {
-      console.log("\n🛑 Claude is stuck");
-      await writeState({ ...state, iteration: i, status: "stuck" });
-      await notify("Ralph Stuck", `Exhausted options after ${i} iterations`, "high");
-      process.exit(2);
-    }
-
-    console.log(`\n✓ Iteration ${i} complete\n`);
-  }
-
-  console.log(`\n⚠️  Max iterations (${max}) reached`);
-  await writeState({ ...state, iteration: max, status: "max_iterations_reached" });
-  await notify("Ralph Max Iterations", `Reached ${max} iterations`);
-  process.exit(1);
+  await runLoop({
+    ...runnerConfig,
+    maxIterations,
+    startIteration,
+  });
 }
 
 async function watchMode(stream: boolean) {

@@ -1,1 +1,2 @@
 [2026-01-13T03:10:05Z] Task: Extract shared utilities to src/ | Created src/colors.ts, src/formatter.ts, and src/auto-update.ts, updated cli.ts to import from new modules. All tests pass and types check. | Gotchas: Need to keep `import { $ } from "bun"` in cli.ts since setup() still uses it.
+[2026-01-12T14:30:00Z] Task: Create the iteration runner abstraction | Created src/runner.ts with runSingleIteration and runLoop functions. Refactored feature() and backlog() in cli.ts to use the new runner, reducing each from ~100 lines to ~40 lines. | Gotchas: none
