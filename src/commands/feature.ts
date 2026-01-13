@@ -1,7 +1,20 @@
 import { checkRepoRoot, readConfig, getFeatureDir, listFeatures, getFeaturePrompt } from "../../lib";
 import { runSingleIteration, runLoop } from "../runner";
 
-export async function feature(name: string, once: boolean) {
+export async function feature(args: string[]) {
+  const name = args.find((a) => !a.startsWith("-"));
+  if (!name) {
+    const features = await listFeatures();
+    if (features.length > 0) {
+      console.error("Usage: ralph feature <name>");
+      console.error(`\nAvailable features: ${features.join(", ")}`);
+    } else {
+      console.error("Usage: ralph feature <name>");
+      console.error("\nNo features found. Create one with: /create-ralph-plan <name>");
+    }
+    process.exit(1);
+  }
+  const once = args.includes("--once");
   checkRepoRoot();
 
   const config = await readConfig();

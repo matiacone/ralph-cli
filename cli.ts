@@ -4,7 +4,6 @@ import { autoUpdate } from "./src/auto-update";
 
 await autoUpdate();
 
-import { listFeatures } from "./lib";
 import { setup } from "./src/commands/setup";
 import { feature } from "./src/commands/feature";
 import { backlog } from "./src/commands/backlog";
@@ -21,23 +20,9 @@ switch (command) {
   case "setup":
     await setup(args);
     break;
-  case "feature": {
-    const name = args.find((a) => !a.startsWith("-"));
-    if (!name) {
-      const features = await listFeatures();
-      if (features.length > 0) {
-        console.error("Usage: ralph feature <name>");
-        console.error(`\nAvailable features: ${features.join(", ")}`);
-      } else {
-        console.error("Usage: ralph feature <name>");
-        console.error("\nNo features found. Create one with: /create-ralph-plan <name>");
-      }
-      process.exit(1);
-    }
-    const once = args.includes("--once");
-    await feature(name, once);
+  case "feature":
+    await feature(args);
     break;
-  }
   case "backlog":
     await backlog(args);
     break;
@@ -50,11 +35,9 @@ switch (command) {
   case "list":
     await list();
     break;
-  case "watch": {
-    const stream = args.includes("--stream");
-    await watchMode(stream);
+  case "watch":
+    await watchMode(args);
     break;
-  }
   case "completions":
     await completions(args);
     break;

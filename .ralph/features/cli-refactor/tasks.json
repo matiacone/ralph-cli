@@ -42,7 +42,7 @@
         "The shebang and auto-update remain at the top",
         "Command dispatch switch statement delegates to imported functions"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Verify functionality and run tests",

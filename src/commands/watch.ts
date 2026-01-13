@@ -7,7 +7,8 @@ import {
   hasOpenTasks,
 } from "../../lib";
 
-export async function watchMode(stream: boolean) {
+export async function watchMode(args: string[]) {
+  const stream = args.includes("--stream");
   checkRepoRoot();
 
   const stateFile = Bun.file(".ralph/state.json");
