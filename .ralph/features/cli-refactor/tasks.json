@@ -53,7 +53,7 @@
         "ralph list shows the status dashboard correctly",
         "ralph setup initializes a new project correctly"
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }
