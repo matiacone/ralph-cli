@@ -1,0 +1,59 @@
+{
+  "tasks": [
+    {
+      "title": "Extract shared utilities to src/",
+      "description": "The colors constant and StreamFormatter class are used across multiple commands but have no dependencies on command-specific logic. Moving them to dedicated files enables reuse and cleaner imports.",
+      "acceptance": [
+        "src/colors.ts exports the c color constants object",
+        "src/formatter.ts exports the StreamFormatter class",
+        "src/auto-update.ts exports the autoUpdate function",
+        "All files compile without errors"
+      ],
+      "passes": true
+    },
+    {
+      "title": "Create the iteration runner abstraction",
+      "description": "The feature() and backlog() functions contain ~100 lines of duplicated logic for spawning Claude, streaming output, logging, and checking completion. A shared runner module eliminates this duplication and makes both commands easier to maintain.",
+      "acceptance": [
+        "src/runner.ts provides functions for single iteration and loop modes",
+        "Runner handles Claude spawning, streaming, logging, and state updates",
+        "Runner checks for task completion and STUCK signals",
+        "Exports are typed and documented"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Extract command handlers to src/commands/",
+      "description": "Each CLI command should live in its own file for maintainability. Commands that use the runner (feature, backlog) should be simplified to just argument parsing and runner configuration.",
+      "acceptance": [
+        "src/commands/ contains: setup.ts, feature.ts, backlog.ts, watch.ts, status.ts, list.ts, cancel.ts, help.ts",
+        "src/completions.ts contains the bash completion script and handler",
+        "Each command file exports a single async function",
+        "feature.ts and backlog.ts use the runner from src/runner.ts"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Refactor cli.ts to thin entry point",
+      "description": "The main cli.ts should only handle auto-update, argument parsing, and dispatching to command handlers. All command logic moves to imported modules.",
+      "acceptance": [
+        "cli.ts is under 100 lines",
+        "cli.ts imports and calls command handlers from src/commands/",
+        "The shebang and auto-update remain at the top",
+        "Command dispatch switch statement delegates to imported functions"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Verify functionality and run tests",
+      "description": "After refactoring, all existing functionality must work identically. Tests should pass and manual verification of key commands confirms no regressions.",
+      "acceptance": [
+        "bun test passes with no failures",
+        "ralph help displays the help text",
+        "ralph list shows the status dashboard correctly",
+        "ralph setup initializes a new project correctly"
+      ],
+      "passes": false
+    }
+  ]
+}

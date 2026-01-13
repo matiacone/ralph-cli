@@ -1,28 +1,9 @@
 #!/usr/bin/env bun
 
-import { $ } from "bun";
-
-async function autoUpdate() {
-  const scriptDir = import.meta.dir;
-  try {
-    await $`git -C ${scriptDir} fetch --quiet`.quiet();
-    // Count commits on remote that we don't have locally (i.e., we're behind)
-    const behind = await $`git -C ${scriptDir} rev-list HEAD..origin/master --count`.quiet().text();
-
-    if (parseInt(behind.trim(), 10) > 0) {
-      console.log("🔄 Updating Ralph...");
-      await $`git -C ${scriptDir} pull --quiet`.quiet();
-      console.log("✅ Updated. Restarting...\n");
-      const args = process.argv.slice(1);
-      Bun.spawn(["bun", ...args], { stdio: ["inherit", "inherit", "inherit"] });
-      process.exit(0);
-    }
-  } catch (err) {
-    console.error("⚠️  Auto-update failed:", err instanceof Error ? err.message : err);
-  }
-}
+import { autoUpdate } from "./src/auto-update";
 
 await autoUpdate();
+import { $ } from "bun";
 import {
   notify,
   checkRepoRoot,
@@ -42,18 +23,8 @@ import {
   appendToLog,
 } from "./lib";
 import { watch, type FSWatcher } from "fs";
-
-const c = {
-  reset: "\x1b[0m",
-  dim: "\x1b[2m",
-  bold: "\x1b[1m",
-  cyan: "\x1b[36m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  magenta: "\x1b[35m",
-  blue: "\x1b[34m",
-  gray: "\x1b[90m",
-};
+import { c } from "./src/colors";
+import { StreamFormatter } from "./src/formatter";
 
 const BASH_COMPLETION_SCRIPT = `# Ralph CLI bash completion
 # Install: ralph completions bash >> ~/.bashrc
@@ -166,135 +137,6 @@ async function setup(args: string[]) {
   console.log("  ralph feature <name>  - Run a feature plan");
 }
 
-class StreamFormatter {
-  private buffer = '';
-  private inCodeBlock = false;
-  private codeBlockLang = '';
-  private lineBuffer = '';
-  private assistantText = '';
-
-  reset() {
-    this.buffer = '';
-    this.inCodeBlock = false;
-    this.codeBlockLang = '';
-    this.lineBuffer = '';
-    this.assistantText = '';
-  }
-
-  getAssistantText(): string {
-    return this.assistantText;
-  }
-
-  private formatLine(line: string): string {
-    // Code block start
-    if (line.startsWith('```')) {
-      this.inCodeBlock = !this.inCodeBlock;
-      if (this.inCodeBlock) {
-        this.codeBlockLang = line.slice(3).trim();
-        const lang = this.codeBlockLang ? ` ${c.dim}${this.codeBlockLang}${c.reset}` : '';
-        return `${c.dim}┌──${lang}${c.reset}\n`;
-      } else {
-        this.codeBlockLang = '';
-        return `${c.dim}└──${c.reset}\n`;
-      }
-    }
-
-    // Inside code block - dim the code
-    if (this.inCodeBlock) {
-      return `${c.dim}│${c.reset} ${c.cyan}${line}${c.reset}\n`;
-    }
-
-    // Headers
-    if (line.startsWith('### ')) {
-      return `${c.bold}${c.blue}${line.slice(4)}${c.reset}\n`;
-    }
-    if (line.startsWith('## ')) {
-      return `${c.bold}${c.magenta}${line.slice(3)}${c.reset}\n`;
-    }
-    if (line.startsWith('# ')) {
-      return `${c.bold}${c.green}${line.slice(2)}${c.reset}\n`;
-    }
-
-    // Bullet points
-    if (line.startsWith('- ') || line.startsWith('* ')) {
-      return `${c.yellow}•${c.reset} ${line.slice(2)}\n`;
-    }
-
-    // Numbered lists
-    const numberedMatch = line.match(/^(\d+)\. (.*)$/);
-    if (numberedMatch) {
-      return `${c.yellow}${numberedMatch[1]}.${c.reset} ${numberedMatch[2]}\n`;
-    }
-
-    // Inline code
-    const formatted = line.replace(/`([^`]+)`/g, `${c.cyan}$1${c.reset}`);
-
-    return formatted + '\n';
-  }
-
-  formatText(text: string): string {
-    let output = '';
-    const combined = this.lineBuffer + text;
-    const lines = combined.split('\n');
-
-    // Keep the last incomplete line in the buffer
-    this.lineBuffer = lines.pop() || '';
-
-    for (const line of lines) {
-      output += this.formatLine(line);
-    }
-
-    return output;
-  }
-
-  parse(text: string): { output: string; remaining: string } {
-    const combined = this.buffer + text;
-    const lines = combined.split('\n');
-    const remaining = lines.pop() || '';
-    let output = '';
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const event = JSON.parse(line);
-
-        // Handle assistant text content
-        if (event.type === 'assistant' && event.message?.content) {
-          for (const block of event.message.content) {
-            if (block.type === 'text') {
-              this.assistantText += block.text;
-              output += this.formatText(block.text);
-            }
-          }
-        }
-
-        // Handle tool use - show what tool is being called
-        if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
-          const toolName = event.content_block.name;
-          output += `\n${c.dim}─── ${c.yellow}${toolName}${c.dim} ───${c.reset}\n`;
-        }
-
-        // Handle tool results
-        if (event.type === 'result' && event.subtype === 'success') {
-          output += `${c.dim}───────────────${c.reset}\n\n`;
-        }
-      } catch {}
-    }
-
-    this.buffer = remaining;
-    return { output, remaining };
-  }
-
-  flush(): string {
-    if (this.lineBuffer) {
-      const output = this.formatLine(this.lineBuffer);
-      this.lineBuffer = '';
-      return output;
-    }
-    return '';
-  }
-}
-
 async function feature(name: string, once: boolean) {
   checkRepoRoot();
 
@@ -324,7 +166,7 @@ async function feature(name: string, once: boolean) {
   if (once) {
     console.log(`🔄 Ralph Feature: ${name} (single iteration)\n`);
     await appendToLog(name, `\n${"=".repeat(60)}\nSession Start - Single Iteration\n${"=".repeat(60)}\n`);
-    const args = ["claude", "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose", prompt];
+    const args = ["claude", "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose", prompt];
     const proc = Bun.spawn(args, {
       stdio: ["inherit", "pipe", "inherit"],
     });
@@ -375,7 +217,7 @@ async function feature(name: string, once: boolean) {
 
     await appendToLog(name, `\n${"=".repeat(60)}\nSession Start - Iteration ${i}\n${"=".repeat(60)}\n`);
 
-    const args = ["claude", "--permission-mode", "bypassPermissions", "-p", "--output-format", "stream-json", "--verbose", prompt];
+    const args = ["claude", "--dangerously-skip-permissions", "-p", "--output-format", "stream-json", "--verbose", prompt];
 
     const proc = Bun.spawn(args, {
       stdio: ["inherit", "pipe", "inherit"],
@@ -471,7 +313,7 @@ async function backlog(args: string[]) {
   if (once) {
     console.log("🔄 Ralph Backlog (single iteration)\n");
     await appendToLog(undefined, `\n${"=".repeat(60)}\nSession Start - Single Iteration\n${"=".repeat(60)}\n`);
-    const args = ["claude", "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose", backlogPrompt];
+    const args = ["claude", "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose", backlogPrompt];
     const proc = Bun.spawn(args, {
       stdio: ["inherit", "pipe", "inherit"],
     });
@@ -527,7 +369,7 @@ async function backlog(args: string[]) {
 
     await appendToLog(undefined, `\n${"=".repeat(60)}\nSession Start - Iteration ${i}\n${"=".repeat(60)}\n`);
 
-    const args = ["claude", "--permission-mode", "bypassPermissions", "-p", "--output-format", "stream-json", "--verbose", backlogPrompt];
+    const args = ["claude", "--dangerously-skip-permissions", "-p", "--output-format", "stream-json", "--verbose", backlogPrompt];
 
     const proc = Bun.spawn(args, {
       stdio: ["inherit", "pipe", "inherit"],
@@ -843,11 +685,19 @@ interface Task {
 async function list() {
   checkRepoRoot();
 
+  const BOX_WIDTH = 45;
+  const header = (title: string) => {
+    const padding = Math.max(0, BOX_WIDTH - 2 - title.length);
+    const left = Math.floor(padding / 2);
+    const right = padding - left;
+    console.log(`${c.dim}┌${"─".repeat(BOX_WIDTH)}┐${c.reset}`);
+    console.log(`${c.dim}│${c.reset}${" ".repeat(left)}${c.cyan}${c.bold}${title}${c.reset}${" ".repeat(right)}${c.dim}│${c.reset}`);
+    console.log(`${c.dim}└${"─".repeat(BOX_WIDTH)}┘${c.reset}`);
+  };
+
   // Status section
   const state = await readState();
-  console.log("┌─────────────────────────────────────────┐");
-  console.log("│              Ralph Status               │");
-  console.log("└─────────────────────────────────────────┘");
+  header("Ralph Status");
 
   if (state) {
     const statusIcon =
@@ -857,17 +707,16 @@ async function list() {
       "⚪";
     console.log(`  ${statusIcon} ${state.status}`);
     if (state.status === "running" && state.feature) {
-      console.log(`     Working on: ${state.feature}`);
+      console.log(`     ${c.dim}Working on:${c.reset} ${c.cyan}${state.feature}${c.reset}`);
     }
-    console.log(`     Iteration: ${state.iteration}/${state.maxIterations}`);
+    console.log(`     ${c.dim}Iteration:${c.reset} ${state.iteration}/${state.maxIterations}`);
   } else {
-    console.log("  ⚪ Not initialized (run 'ralph setup')");
+    console.log(`  ⚪ ${c.dim}Not initialized (run 'ralph setup')${c.reset}`);
   }
 
   // Backlog section
-  console.log("\n┌─────────────────────────────────────────┐");
-  console.log("│              Backlog Tasks              │");
-  console.log("└─────────────────────────────────────────┘");
+  console.log();
+  header("Backlog Tasks");
 
   const backlogFile = Bun.file(".ralph/backlog.json");
   if (await backlogFile.exists()) {
@@ -877,44 +726,97 @@ async function list() {
     const completedCount = tasks.length - openTasks.length;
 
     if (openTasks.length === 0) {
-      console.log("  ✅ All tasks complete!");
+      console.log(`  ${c.green}✅ All tasks complete!${c.reset}`);
     } else {
       for (const task of openTasks) {
         console.log(`  ○ ${task.title}`);
         if (task.branch) {
-          console.log(`    └─ branch: ${task.branch}`);
+          console.log(`    ${c.dim}└─ branch: ${task.branch}${c.reset}`);
         }
       }
     }
-    console.log(`\n  ${completedCount}/${tasks.length} tasks completed`);
+    console.log();
+    console.log(`  ${c.dim}${completedCount}/${tasks.length} tasks completed${c.reset}`);
   } else {
-    console.log("  No backlog found");
+    console.log(`  ${c.dim}No backlog found${c.reset}`);
   }
 
-  // Features section
-  console.log("\n┌─────────────────────────────────────────┐");
-  console.log("│               Features                  │");
-  console.log("└─────────────────────────────────────────┘");
+  // Collect feature metadata
+  interface FeatureInfo {
+    name: string;
+    tasks: Task[];
+    openTasks: Task[];
+    isDone: boolean;
+    isActive: boolean;
+    birthtime: Date;
+  }
 
   const featureNames = await listFeatures();
-  if (featureNames.length === 0) {
-    console.log("  No features found");
+  const features: FeatureInfo[] = [];
+
+  for (const name of featureNames) {
+    const tasksPath = `.ralph/features/${name}/tasks.json`;
+    const tasksFile = Bun.file(tasksPath);
+    if (await tasksFile.exists()) {
+      const data = await tasksFile.json();
+      const tasks: Task[] = data.tasks ?? [];
+      const openTasks = tasks.filter((t) => !t.passes);
+      const isActive = state?.feature === name && state?.status === "running";
+
+      // Get file birthtime for sorting
+      const stat = await Bun.$`stat -c %W ${tasksPath}`.text();
+      const birthtime = new Date(parseInt(stat.trim()) * 1000);
+
+      features.push({
+        name,
+        tasks,
+        openTasks,
+        isDone: openTasks.length === 0,
+        isActive,
+        birthtime,
+      });
+    }
+  }
+
+  // Sort by birthtime descending (most recent first)
+  features.sort((a, b) => b.birthtime.getTime() - a.birthtime.getTime());
+
+  const activeFeatures = features.filter((f) => !f.isDone);
+  const doneFeatures = features.filter((f) => f.isDone);
+
+  // Active features section
+  console.log();
+  header("Features (Active)");
+
+  if (activeFeatures.length === 0) {
+    console.log(`  ${c.dim}No active features${c.reset}`);
   } else {
-    for (const name of featureNames) {
-      const tasksFile = Bun.file(`.ralph/features/${name}/tasks.json`);
-      if (await tasksFile.exists()) {
-        const data = await tasksFile.json();
-        const tasks: Task[] = data.tasks ?? [];
-        const openTasks = tasks.filter((t) => !t.passes);
-        const isActive = state?.feature === name && state?.status === "running";
+    for (const feature of activeFeatures) {
+      const icon = feature.isActive ? "🔄" : "📋";
+      const done = feature.tasks.length - feature.openTasks.length;
+      const total = feature.tasks.length;
+      const progress = `${c.dim}${done}/${total} done${c.reset}`;
 
-        const icon = isActive ? "🔄" : openTasks.length === 0 ? "✅" : "📋";
-        console.log(`  ${icon} ${name} (${tasks.length - openTasks.length}/${tasks.length} done)`);
-
-        for (const task of openTasks) {
+      console.log(`  ${icon} ${c.bold}${feature.name}${c.reset}  ${progress}`);
+      for (const task of feature.tasks) {
+        if (task.passes) {
+          console.log(`     ${c.green}✓${c.reset} ${c.dim}${task.title}${c.reset}`);
+        } else {
           console.log(`     ○ ${task.title}`);
         }
       }
+    }
+  }
+
+  // Done features section
+  console.log();
+  header("Features (Done)");
+
+  if (doneFeatures.length === 0) {
+    console.log(`  ${c.dim}No completed features${c.reset}`);
+  } else {
+    for (const feature of doneFeatures) {
+      console.log(`  ${c.green}✅ ${feature.name}${c.reset}`);
     }
   }
 }

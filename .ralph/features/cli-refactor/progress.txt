@@ -1,0 +1,1 @@
+[2026-01-13T03:10:05Z] Task: Extract shared utilities to src/ | Created src/colors.ts, src/formatter.ts, and src/auto-update.ts, updated cli.ts to import from new modules. All tests pass and types check. | Gotchas: Need to keep `import { $ } from "bun"` in cli.ts since setup() still uses it.
