@@ -1,4 +1,4 @@
-import { Daytona, Sandbox } from "@daytonaio/sdk";
+import { Daytona, Sandbox, PtyHandle } from "@daytonaio/sdk";
 import type { Executor, ExecutionResult } from "../executor";
 
 export interface DaytonaExecutorConfig {
@@ -9,7 +9,6 @@ export interface DaytonaExecutorConfig {
 export class DaytonaExecutor implements Executor {
   private daytona: Daytona;
   private sandbox: Sandbox | null = null;
-  private sessionId = "ralph-session";
   private config: DaytonaExecutorConfig;
 
   constructor(config: DaytonaExecutorConfig) {
@@ -28,6 +27,7 @@ export class DaytonaExecutor implements Executor {
       throw new Error("GH_TOKEN environment variable is required for sandbox mode");
     }
 
+    console.log("📦 Creating Daytona sandbox...");
     this.sandbox = await this.daytona.create({
       language: "typescript",
       envVars: {
@@ -35,70 +35,83 @@ export class DaytonaExecutor implements Executor {
         GH_TOKEN: ghToken,
       },
     });
+    console.log("✓ Sandbox created");
 
+    console.log("📥 Cloning repository...");
     await this.sandbox.git.clone(
       this.config.repoUrl,
-      "/workspace",
+      "workspace",
       this.config.branch,
       undefined,
       undefined,
       ghToken
     );
+    console.log("✓ Repository cloned");
 
-    await this.sandbox.process.createSession(this.sessionId);
+    console.log("📦 Installing bun...");
+    await this.sandbox.process.executeCommand("curl -fsSL https://bun.sh/install | bash");
 
-    await this.sandbox.process.executeSessionCommand(this.sessionId, {
-      command: "cd /workspace && bun install",
-    });
+    console.log("📦 Installing dependencies...");
+    const bunResult = await this.sandbox.process.executeCommand(
+      "export PATH=$HOME/.bun/bin:$PATH && cd ~/workspace && bun install"
+    );
+    console.log("✓ Dependencies installed", bunResult.exitCode === 0 ? "" : `(exit: ${bunResult.exitCode})`);
 
-    await this.sandbox.process.executeSessionCommand(this.sessionId, {
-      command: "npm install -g @anthropic-ai/claude-code",
-    });
+    console.log("📦 Installing Claude Code...");
+    const claudeResult = await this.sandbox.process.executeCommand(
+      "npm install -g @anthropic-ai/claude-code"
+    );
+    console.log("✓ Claude Code installed", claudeResult.exitCode === 0 ? "" : `(exit: ${claudeResult.exitCode})`);
   }
 
   async execute(
     prompt: string,
     onStdout: (chunk: string) => void,
-    onStderr: (chunk: string) => void
+    _onStderr: (chunk: string) => void
   ): Promise<ExecutionResult> {
     if (!this.sandbox) {
       throw new Error("Executor not initialized. Call initialize() first.");
     }
 
+    const anthropicKey = process.env.ANTHROPIC_API_KEY!;
+    const ghToken = process.env.GH_TOKEN!;
+
     const escapedPrompt = prompt.replace(/'/g, "'\\''");
-    const command = `cd /workspace && claude --dangerously-skip-permissions -p --output-format stream-json --verbose '${escapedPrompt}'`;
-
-    const result = await this.sandbox.process.executeSessionCommand(
-      this.sessionId,
-      { command, runAsync: true }
-    );
-
-    const cmdId = result.cmdId;
-    if (!cmdId) {
-      throw new Error("No command ID returned from session command");
-    }
+    // Use npx to run claude (avoids PATH issues with npm global installs)
+    const claudeCmd = `npx @anthropic-ai/claude-code --dangerously-skip-permissions -p --output-format stream-json --verbose '${escapedPrompt}'`;
 
     let output = "";
-    await this.sandbox.process.getSessionCommandLogs(
-      this.sessionId,
-      cmdId,
-      (chunk) => {
-        output += chunk;
-        onStdout(chunk);
+    const decoder = new TextDecoder();
+
+    console.log("🚀 Starting Claude in sandbox via PTY...");
+    const ptyHandle: PtyHandle = await this.sandbox.process.createPty({
+      id: `claude-${Date.now()}`,
+      cwd: "/home/daytona/workspace",
+      cols: 200,
+      rows: 50,
+      onData: (data: Uint8Array) => {
+        const text = decoder.decode(data);
+        output += text;
+        onStdout(text);
       },
-      (chunk) => {
-        output += chunk;
-        onStderr(chunk);
-      }
+    });
+
+    await ptyHandle.waitForConnection();
+    console.log("📡 PTY connected, streaming output...");
+
+    // Use exec to replace shell with claude - when claude exits, PTY exits
+    // Export env vars first, then exec to replace shell
+    ptyHandle.sendInput(
+      `export ANTHROPIC_API_KEY="${anthropicKey}" GH_TOKEN="${ghToken}" && exec ${claudeCmd}\n`
     );
 
-    const finalResult = await this.sandbox.process.getSessionCommand(
-      this.sessionId,
-      cmdId
-    );
+    const result = await ptyHandle.wait();
+    await ptyHandle.disconnect();
+
+    console.log("✓ Command completed (exit code:", result.exitCode, ")");
 
     return {
-      exitCode: finalResult.exitCode ?? 1,
+      exitCode: result.exitCode ?? 1,
       output,
     };
   }
@@ -109,7 +122,7 @@ export class DaytonaExecutor implements Executor {
     }
 
     try {
-      const buffer = await this.sandbox.fs.downloadFile(`/workspace/${path}`);
+      const buffer = await this.sandbox.fs.downloadFile(`workspace/${path}`);
       return buffer.toString();
     } catch {
       return null;

@@ -5,7 +5,6 @@ import {
   readState,
   writeState,
   hasOpenTasks,
-  appendToLog,
   type TaskFile,
 } from "../lib";
 import type { Executor } from "./executor";
@@ -29,7 +28,6 @@ export async function runSingleIteration(config: RunnerConfig): Promise<Iteratio
   const { prompt, featureName, label } = config;
 
   console.log(`🔄 Ralph ${label} (single iteration)\n`);
-  await appendToLog(featureName, `\n${"=".repeat(60)}\nSession Start - Single Iteration\n${"=".repeat(60)}\n`);
 
   const args = ["claude", "--permission-mode", "acceptEdits", prompt];
   const proc = Bun.spawn(args, {
@@ -87,14 +85,11 @@ export async function runLoop(config: LoopConfig): Promise<void> {
       console.log(`${c.bold}Iteration ${i}${c.reset}`);
       console.log(`${c.dim}════════════════════════════════════════${c.reset}\n`);
 
-      await appendToLog(featureName, `\n${"=".repeat(60)}\nSession Start - Iteration ${i}\n${"=".repeat(60)}\n`);
-
       const formatter = new StreamFormatter();
 
       const result = await executor.execute(
         prompt,
-        async (chunk) => {
-          await appendToLog(featureName, chunk);
+        (chunk) => {
           const { output } = formatter.parse(chunk);
           if (output) process.stdout.write(output);
         },

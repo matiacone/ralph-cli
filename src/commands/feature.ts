@@ -26,6 +26,11 @@ export async function feature(args: string[]) {
   const once = args.includes("--once");
   const sandbox = args.includes("--sandbox");
 
+  if (sandbox && once) {
+    console.error("❌ --sandbox and --once cannot be used together");
+    process.exit(1);
+  }
+
   if (sandbox) {
     if (!process.env.ANTHROPIC_API_KEY) {
       console.error("❌ ANTHROPIC_API_KEY environment variable is required for --sandbox mode");

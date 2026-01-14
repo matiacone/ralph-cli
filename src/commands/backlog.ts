@@ -30,6 +30,11 @@ export async function backlog(args: string[]) {
     }
   }
 
+  if (sandbox && once) {
+    console.error("❌ --sandbox and --once cannot be used together");
+    process.exit(1);
+  }
+
   if (sandbox) {
     if (!process.env.ANTHROPIC_API_KEY) {
       console.error("❌ ANTHROPIC_API_KEY environment variable is required for --sandbox mode");
