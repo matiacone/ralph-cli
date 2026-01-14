@@ -193,3 +193,39 @@ export async function appendToLog(featureName: string | undefined, chunk: string
   }
   await Bun.write(logPath, existing + entry);
 }
+
+export async function getGitRemoteUrl(): Promise<string> {
+  try {
+    const result = await Bun.$`git remote get-url origin`.quiet();
+    const url = result.text().trim();
+    if (!url) {
+      throw new Error("No remote URL found for 'origin'");
+    }
+    return url;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("No remote URL")) {
+      throw error;
+    }
+    throw new Error(
+      `Failed to get git remote URL: ${error instanceof Error ? error.message : "Unknown error"}. Make sure you're in a git repository with an 'origin' remote configured.`
+    );
+  }
+}
+
+export async function getCurrentBranch(): Promise<string> {
+  try {
+    const result = await Bun.$`git branch --show-current`.quiet();
+    const branch = result.text().trim();
+    if (!branch) {
+      throw new Error("Not on a branch (possibly in detached HEAD state)");
+    }
+    return branch;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("Not on a branch")) {
+      throw error;
+    }
+    throw new Error(
+      `Failed to get current git branch: ${error instanceof Error ? error.message : "Unknown error"}. Make sure you're in a git repository.`
+    );
+  }
+}

@@ -1,1 +1,2 @@
 [2026-01-14T00:00:00Z] Task: Create Executor interface and LocalExecutor | Created src/executor.ts with Executor interface (initialize, execute, readFile, cleanup) and src/executors/local.ts implementing it with Bun.spawn() for process execution and Bun.file() for file reading. | Gotchas: none
+[2026-01-14T00:01:00Z] Task: Add git helper functions to lib.ts | Added getGitRemoteUrl() and getCurrentBranch() functions using Bun.$`` shell commands with descriptive error handling for git failures. | Gotchas: none

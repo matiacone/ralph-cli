@@ -18,7 +18,7 @@
         "getCurrentBranch() returns the currently checked out branch name",
         "Both functions throw descriptive errors if git commands fail"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Refactor runner.ts to use Executor abstraction",
