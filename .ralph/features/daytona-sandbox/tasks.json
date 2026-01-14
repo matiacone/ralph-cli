@@ -45,7 +45,7 @@
         "cleanup() deletes the sandbox",
         "ANTHROPIC_API_KEY and GH_TOKEN are passed to sandbox as env vars"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Create executor factory and exports",
