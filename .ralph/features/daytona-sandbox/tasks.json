@@ -55,7 +55,7 @@
         "createExecutor({ sandbox: false }) returns LocalExecutor",
         "createExecutor({ sandbox: true, repoUrl, branch }) returns DaytonaExecutor"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Add --sandbox flag to backlog and feature commands",
