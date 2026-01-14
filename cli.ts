@@ -79,10 +79,7 @@ _ralph_completions() {
     backlog)
       [[ \${cur} == -* ]] && COMPREPLY=( \$(compgen -W "--once --max-iterations --resume" -- "\${cur}") )
       return ;;
-    watch)
-      [[ \${cur} == -* ]] && COMPREPLY=( \$(compgen -W "--stream" -- "\${cur}") )
-      return ;;
-    cancel|status|list|help) return ;;
+    watch|cancel|status|list|help) return ;;
     completions)
       [[ \${cword} -eq 2 ]] && COMPREPLY=( \$(compgen -W "bash" -- "\${cur}") )
       return ;;
@@ -587,7 +584,7 @@ async function backlog(args: string[]) {
   process.exit(1);
 }
 
-async function watchMode(stream: boolean) {
+async function watchMode() {
   checkRepoRoot();
 
   const stateFile = Bun.file(".ralph/state.json");
@@ -658,10 +655,9 @@ async function watchMode(stream: boolean) {
 
       isRunning = true;
 
-      // Determine which command to run
-      let command: string[];
       if (changedPath === backlogPath) {
-        command = ["ralph", "backlog"];
+        console.log(`\n🚀 Running: ralph backlog\n`);
+        await backlog([]);
       } else {
         // Extract feature name from path like .ralph/features/<name>/tasks.json
         const match = changedPath.match(/\.ralph\/features\/([^/]+)\/tasks\.json/);
@@ -671,20 +667,9 @@ async function watchMode(stream: boolean) {
           watchTargets.set(changedPath, newTitles);
           return;
         }
-        command = ["ralph", "feature", match[1]];
+        console.log(`\n🚀 Running: ralph feature ${match[1]}\n`);
+        await feature(match[1], false);
       }
-
-      if (stream) {
-        command.push("--stream");
-      }
-
-      console.log(`\n🚀 Running: ${command.join(" ")}\n`);
-
-      const proc = Bun.spawn(command, {
-        stdio: ["inherit", "inherit", "inherit"],
-      });
-
-      await proc.exited;
 
       // Update baseline after run completes
       const updatedTaskFile = await readTasksFile(changedPath);
@@ -960,7 +945,6 @@ Commands:
   list               List open backlog tasks, features, and status
 
   watch              Watch for new tasks and auto-run ralph
-                     --stream              Stream Claude output in realtime
 
   completions bash   Output bash completion script
                      Install: ralph completions bash >> ~/.bashrc
@@ -1003,11 +987,9 @@ switch (command) {
   case "list":
     await list();
     break;
-  case "watch": {
-    const stream = args.includes("--stream");
-    await watchMode(stream);
+  case "watch":
+    await watchMode();
     break;
-  }
   case "completions":
     await completions(args);
     break;
