@@ -12,7 +12,11 @@
       "Bash(bun ./cli.ts:*)",
       "Bash(npx tsc --noEmit)",
       "Bash(bun build:*)",
-      "Bash(bun run:*)"
+      "Bash(bun run:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)"
     ]
   }
 }

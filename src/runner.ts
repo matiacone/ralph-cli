@@ -28,32 +28,12 @@ export async function runSingleIteration(config: RunnerConfig): Promise<Iteratio
   console.log(`🔄 Ralph ${label} (single iteration)\n`);
   await appendToLog(featureName, `\n${"=".repeat(60)}\nSession Start - Single Iteration\n${"=".repeat(60)}\n`);
 
-  const args = ["claude", "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose", prompt];
+  const args = ["claude", "--permission-mode", "acceptEdits", prompt];
   const proc = Bun.spawn(args, {
-    stdio: ["inherit", "pipe", "inherit"],
+    stdio: ["inherit", "inherit", "inherit"],
   });
 
-  const reader = proc.stdout.getReader();
-  const decoder = new TextDecoder();
-  const formatter = new StreamFormatter();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const text = decoder.decode(value);
-    await appendToLog(featureName, text);
-    const { output } = formatter.parse(text);
-    if (output) process.stdout.write(output);
-  }
-  const remaining = formatter.flush();
-  if (remaining) process.stdout.write(remaining);
-
   const code = await proc.exited;
-  if (code !== 0) {
-    console.error(`\n❌ Claude exited with code ${code}`);
-    process.exit(code);
-  }
-  console.log("\n✅ Iteration complete");
 
   return { code, isComplete: false, isStuck: false };
 }
