@@ -31,7 +31,7 @@
         "SIGINT/SIGTERM handlers call cleanup before exit",
         "Running `ralph backlog --once` still works (backward compatible)"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Implement DaytonaExecutor",
