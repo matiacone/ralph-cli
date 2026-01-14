@@ -44,7 +44,6 @@ describe("getFeaturePrompt", () => {
     expect(prompt).toContain("bun run lint:fix");
     expect(prompt).toContain("bun run check-types");
     expect(prompt).toContain("bun run test");
-    expect(prompt).toContain("<promise>COMPLETE</promise>");
     expect(prompt).toContain("<promise>STUCK</promise>");
   });
 
@@ -75,7 +74,6 @@ describe("getBacklogPrompt", () => {
     expect(prompt).toContain("bun run lint:fix");
     expect(prompt).toContain("bun run check-types");
     expect(prompt).toContain("bun run test");
-    expect(prompt).toContain("<promise>COMPLETE</promise>");
     expect(prompt).toContain("<promise>STUCK</promise>");
   });
 

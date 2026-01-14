@@ -11,7 +11,8 @@
       "Bash(bun run check-types:*)",
       "Bash(bun ./cli.ts:*)",
       "Bash(npx tsc --noEmit)",
-      "Bash(bun build:*)"
+      "Bash(bun build:*)",
+      "Bash(bun run:*)"
     ]
   }
 }
