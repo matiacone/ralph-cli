@@ -1,0 +1,84 @@
+{
+  "tasks": [
+    {
+      "title": "Create Executor interface and LocalExecutor",
+      "description": "Define an Executor abstraction that decouples the iteration logic from the execution strategy. The LocalExecutor wraps the current Bun.spawn() behavior so existing functionality continues to work unchanged.",
+      "acceptance": [
+        "src/executor.ts exists with Executor interface (initialize, execute, readFile, cleanup)",
+        "src/executors/local.ts implements Executor using Bun.spawn()",
+        "LocalExecutor.readFile() reads from local filesystem"
+      ],
+      "passes": true
+    },
+    {
+      "title": "Add git helper functions to lib.ts",
+      "description": "The sandbox mode needs to know which repo to clone and which branch to checkout. These helpers extract that information from the local git configuration.",
+      "acceptance": [
+        "getGitRemoteUrl() returns the origin remote URL",
+        "getCurrentBranch() returns the currently checked out branch name",
+        "Both functions throw descriptive errors if git commands fail"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Refactor runner.ts to use Executor abstraction",
+      "description": "The runner currently hardcodes Bun.spawn(). It needs to accept an optional Executor and use it for process spawning, file reading, and cleanup. This enables swapping local execution for sandbox execution.",
+      "acceptance": [
+        "RunnerConfig and LoopConfig interfaces accept optional executor",
+        "runLoop() uses executor.execute() instead of Bun.spawn()",
+        "Task file is read via executor.readFile() instead of direct Bun.file()",
+        "executor.cleanup() is called in finally block",
+        "SIGINT/SIGTERM handlers call cleanup before exit",
+        "Running `ralph backlog --once` still works (backward compatible)"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Implement DaytonaExecutor",
+      "description": "The core sandbox integration. This executor creates a Daytona sandbox, sets up the environment (clone repo, install deps, install Claude Code), executes commands with streaming output, and cleans up when done.",
+      "acceptance": [
+        "@daytonaio/sdk is installed as a dependency",
+        "src/executors/daytona.ts implements Executor interface",
+        "initialize() creates sandbox, clones repo, checks out branch, installs Claude Code",
+        "execute() runs claude command and streams stdout/stderr via callbacks",
+        "readFile() reads files from sandbox filesystem",
+        "cleanup() deletes the sandbox",
+        "ANTHROPIC_API_KEY and GH_TOKEN are passed to sandbox as env vars"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Create executor factory and exports",
+      "description": "A factory function that creates the appropriate executor based on options. This keeps the command handlers simple - they just specify what they want and get the right executor.",
+      "acceptance": [
+        "src/executors/index.ts exports createExecutor() factory function",
+        "createExecutor({ sandbox: false }) returns LocalExecutor",
+        "createExecutor({ sandbox: true, repoUrl, branch }) returns DaytonaExecutor"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Add --sandbox flag to backlog and feature commands",
+      "description": "Wire up the --sandbox flag in the CLI commands so users can opt into sandbox execution. When the flag is present, create a DaytonaExecutor and pass it to the runner.",
+      "acceptance": [
+        "ralph backlog --sandbox creates DaytonaExecutor and passes to runLoop",
+        "ralph feature <name> --sandbox creates DaytonaExecutor and passes to runLoop",
+        "Without --sandbox flag, behavior is unchanged (uses LocalExecutor)",
+        "Error message shown if --sandbox used without required env vars"
+      ],
+      "passes": false
+    },
+    {
+      "title": "End-to-end verification",
+      "description": "Verify the full integration works: sandbox is created, iterations run with streaming output, PRs are pushed from sandbox, and cleanup happens correctly.",
+      "acceptance": [
+        "ralph backlog --once works unchanged (local mode)",
+        "ralph backlog --sandbox --max-iterations 1 creates sandbox, runs iteration, cleans up",
+        "Output streams to terminal in real-time during sandbox execution",
+        "Sandbox is cleaned up on Ctrl+C interrupt",
+        "PR is created from within sandbox (visible on GitHub)"
+      ],
+      "passes": false
+    }
+  ]
+}
