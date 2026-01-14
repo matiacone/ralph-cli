@@ -78,7 +78,7 @@
         "Sandbox is cleaned up on Ctrl+C interrupt",
         "PR is created from within sandbox (visible on GitHub)"
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }
