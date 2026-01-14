@@ -1,5 +1,14 @@
-import { checkRepoRoot, readConfig, getFeatureDir, listFeatures, getFeaturePrompt } from "../../lib";
+import {
+  checkRepoRoot,
+  readConfig,
+  getFeatureDir,
+  listFeatures,
+  getFeaturePrompt,
+  getGitRemoteUrl,
+  getCurrentBranch,
+} from "../../lib";
 import { runSingleIteration, runLoop } from "../runner";
+import { createExecutor } from "../executors";
 
 export async function feature(args: string[]) {
   const name = args.find((a) => !a.startsWith("-"));
@@ -15,6 +24,19 @@ export async function feature(args: string[]) {
     process.exit(1);
   }
   const once = args.includes("--once");
+  const sandbox = args.includes("--sandbox");
+
+  if (sandbox) {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error("❌ ANTHROPIC_API_KEY environment variable is required for --sandbox mode");
+      process.exit(1);
+    }
+    if (!process.env.GH_TOKEN) {
+      console.error("❌ GH_TOKEN environment variable is required for --sandbox mode");
+      process.exit(1);
+    }
+  }
+
   checkRepoRoot();
 
   const config = await readConfig();
@@ -51,5 +73,12 @@ export async function feature(args: string[]) {
     return;
   }
 
-  await runLoop(runnerConfig);
+  let executor;
+  if (sandbox) {
+    const repoUrl = await getGitRemoteUrl();
+    const branch = await getCurrentBranch();
+    executor = await createExecutor({ sandbox: true, repoUrl, branch });
+  }
+
+  await runLoop({ ...runnerConfig, executor });
 }
