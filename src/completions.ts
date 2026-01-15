@@ -7,7 +7,7 @@ _ralph_completions() {
   local cur prev words cword
   _init_completion || return
 
-  local commands="setup feature backlog cancel status list watch help completions"
+  local commands="setup feature backlog cancel status list watch report help completions"
 
   case "\${words[1]}" in
     setup)
@@ -26,6 +26,12 @@ _ralph_completions() {
       return ;;
     watch)
       [[ \${cur} == -* ]] && COMPREPLY=( \$(compgen -W "--stream" -- "\${cur}") )
+      return ;;
+    report)
+      if [[ \${cword} -eq 2 ]]; then
+        local features=\$(ralph completions --list-features 2>/dev/null)
+        COMPREPLY=( \$(compgen -W "\${features}" -- "\${cur}") )
+      fi
       return ;;
     cancel|status|list|help) return ;;
     completions)

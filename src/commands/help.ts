@@ -24,6 +24,8 @@ Commands:
   watch              Watch for new tasks and auto-run ralph
                      --stream              Stream Claude output in realtime
 
+  report <name>      Interactive review of feature progress
+
   completions bash   Output bash completion script
                      Install: ralph completions bash >> ~/.bashrc
 

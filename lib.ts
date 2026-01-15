@@ -93,10 +93,13 @@ export function getBacklogPrompt(vcs: VcsType = "git") {
 1. Find the highest-priority task to work on and work only on that task.
 This should be the one YOU decide has the highest priority - not necessarily the first in the array.
 2. Check that the code is linted via bun run lint:fix, types check via bun run check-types, and tests pass via bun run test.
-3. Update the backlog.json with the work that was done (set passes: true when complete).
-4. Append a concise progress entry to progress.txt:
+3. VERIFICATION: Confirm your changes actually work:
+   - If you made UI changes: Use the Playwriter MCP to visually verify the changes render correctly.
+   - If you added backend routes or logic more complex than basic CRUD: Either write 1-2 unit tests to verify correctness, OR create a test query/mutation in convex/test.ts that logs results and run it via 'npx convex run test:<functionName>' against the live DB.
+4. Update the backlog.json with the work that was done (set passes: true when complete).
+5. Append a concise progress entry to progress.txt:
    Format: [TIMESTAMP] Task: <title> | Branch: <branch> | <1-2 sentence summary of what was done> | Gotchas: <any important learnings/gotchas, or "none">
-5. Make a git commit and submit PR:
+6. Make a git commit and submit PR:
    - Check the current branch with 'git branch --show-current'
    - If you are NOT on the task's branch:
      * Use '${i.createBranch}' to create a new branch
@@ -116,10 +119,13 @@ export function getFeaturePrompt(name: string, vcs: VcsType = "git") {
 2. Review plan.md for context, then find the highest-priority incomplete task in tasks.json.
    This should be the one YOU decide has the highest priority - not necessarily the first in the array.
 3. Implement the task, ensuring code is linted (bun run lint:fix), types check (bun run check-types), and tests pass (bun run test).
-4. Mark the task complete in tasks.json by setting "passes": true.
-5. Append a concise progress entry to ${dir}/progress.txt:
+4. VERIFICATION: Confirm your changes actually work:
+   - If you made UI changes: Use the Playwriter MCP to visually verify the changes render correctly.
+   - If you added backend routes or logic more complex than basic CRUD: Either write 1-2 unit tests to verify correctness, OR create a test query/mutation in convex/test.ts that logs results and run it via 'npx convex run test:<functionName>' against the live DB.
+5. Mark the task complete in tasks.json by setting "passes": true.
+6. Append a concise progress entry to ${dir}/progress.txt:
    Format: [TIMESTAMP] Task: <title> | <1-2 sentence summary of what was done> | Gotchas: <any important learnings/gotchas, or "none">
-6. Make a git commit using the branch from plan.md:
+7. Make a git commit using the branch from plan.md:
    - Check the current branch with 'git branch --show-current'
    - If you are NOT on the branch specified in plan.md:
      * Use '${i.createBranch}' to create the branch with the exact name from plan.md
@@ -129,6 +135,74 @@ export function getFeaturePrompt(name: string, vcs: VcsType = "git") {
      * Then use '${i.updatePr}' to push and update the PR
 ONLY WORK ON A SINGLE TASK.
 If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>STUCK</promise> with a brief summary of what you tried and what is blocking progress.`;
+}
+
+export async function getReportPrompt(name: string): Promise<string> {
+  const dir = getFeatureDir(name);
+
+  let gitLog = "";
+  let gitDiff = "";
+
+  try {
+    const planContent = await Bun.file(`${dir}/plan.md`).text();
+    const branchMatch = planContent.match(/^Branch:\s*(.+)$/m);
+    const branch = branchMatch?.[1]?.trim();
+
+    if (branch) {
+      const logResult = await Bun.$`git log --oneline -10 ${branch} 2>/dev/null`.quiet();
+      gitLog = logResult.text().trim();
+
+      const diffResult =
+        await Bun.$`git diff main...${branch} --stat 2>/dev/null || git diff master...${branch} --stat 2>/dev/null`.quiet();
+      gitDiff = diffResult.text().trim();
+    }
+  } catch {
+    // Git commands may fail, that's ok
+  }
+
+  const tasksFile = await readTasksFile(`${dir}/tasks.json`);
+  let taskSummary = "";
+  if (tasksFile) {
+    const total = tasksFile.tasks.length;
+    const completed = tasksFile.tasks.filter((t) => t.passes).length;
+    const remaining = total - completed;
+    taskSummary = `
+## Task Summary
+- Total tasks: ${total}
+- Completed: ${completed}
+- Remaining: ${remaining}
+`;
+  }
+
+  const gitSection = gitLog
+    ? `
+## Recent Git Activity
+\`\`\`
+${gitLog}
+\`\`\`
+`
+    : "";
+
+  const diffSection = gitDiff
+    ? `
+## Changes in Branch
+\`\`\`
+${gitDiff}
+\`\`\`
+`
+    : "";
+
+  return `@${dir}/plan.md @${dir}/tasks.json @${dir}/progress.txt
+
+You are reviewing the progress of the "${name}" feature.
+${taskSummary}${gitSection}${diffSection}
+Help the user understand:
+- What has been accomplished so far
+- What tasks remain and their priority
+- Any patterns or issues visible in the progress log
+- Recommendations for next steps
+
+Be conversational. The user may ask follow-up questions about the feature, code, or implementation approach.`;
 }
 
 export interface TaskFile {

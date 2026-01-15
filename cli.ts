@@ -11,6 +11,7 @@ import { watchMode } from "./src/commands/watch";
 import { status } from "./src/commands/status";
 import { list } from "./src/commands/list";
 import { cancel } from "./src/commands/cancel";
+import { report } from "./src/commands/report";
 import { help } from "./src/commands/help";
 import { completions } from "./src/completions";
 
@@ -37,6 +38,9 @@ switch (command) {
     break;
   case "watch":
     await watchMode(args);
+    break;
+  case "report":
+    await report(args);
     break;
   case "completions":
     await completions(args);

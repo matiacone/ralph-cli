@@ -43,17 +43,22 @@ export class DaytonaExecutor implements Executor {
       "workspace",
       this.config.branch,
       undefined,
-      undefined,
+      "oauth2",
       ghToken
     );
     console.log("✓ Repository cloned");
 
     console.log("📦 Installing bun...");
-    await this.sandbox.process.executeCommand("curl -fsSL https://bun.sh/install | bash");
+    const bunInstall = await this.sandbox.process.executeCommand(
+      "curl -fsSL https://bun.sh/install | bash && echo 'export PATH=$HOME/.bun/bin:$PATH' >> ~/.bashrc"
+    );
+    if (bunInstall.exitCode !== 0) {
+      console.log("⚠ Bun install failed:", bunInstall.result);
+    }
 
     console.log("📦 Installing dependencies...");
     const bunResult = await this.sandbox.process.executeCommand(
-      "export PATH=$HOME/.bun/bin:$PATH && cd ~/workspace && bun install"
+      "source ~/.bashrc && cd ~/workspace && bun install"
     );
     console.log("✓ Dependencies installed", bunResult.exitCode === 0 ? "" : `(exit: ${bunResult.exitCode})`);
 
@@ -99,10 +104,9 @@ export class DaytonaExecutor implements Executor {
     await ptyHandle.waitForConnection();
     console.log("📡 PTY connected, streaming output...");
 
-    // Use exec to replace shell with claude - when claude exits, PTY exits
-    // Export env vars first, then exec to replace shell
+    // Source bashrc for bun PATH, export env vars, then exec claude
     ptyHandle.sendInput(
-      `export ANTHROPIC_API_KEY="${anthropicKey}" GH_TOKEN="${ghToken}" && exec ${claudeCmd}\n`
+      `source ~/.bashrc && export ANTHROPIC_API_KEY="${anthropicKey}" GH_TOKEN="${ghToken}" && exec ${claudeCmd}\n`
     );
 
     const result = await ptyHandle.wait();
