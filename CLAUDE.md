@@ -1,111 +1,129 @@
----
-description: Use Bun instead of Node.js, npm, pnpm, or vite.
-globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
-alwaysApply: false
----
+# Ralph
 
-Default to using Bun instead of Node.js.
+Autonomous Claude Code runner that executes tasks from a backlog or feature plans in iterations until completion.
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Bun automatically loads .env, so don't use dotenv.
+## Runtime
 
-## APIs
+Use Bun, not Node.js.
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+- `bun <file>` to run
+- `bun test` to run tests
+- `bun install` for dependencies
+- Bun automatically loads `.env`
+
+## Project Structure
+
+```
+cli.ts              # Main CLI entry point with command router
+lib.ts              # Core utilities (state, config, prompts)
+lib.test.ts         # Tests
+src/
+  commands/         # CLI commands (setup, backlog, feature, watch, list, etc.)
+  executors/        # Execution backends (local, daytona)
+  runner.ts         # Iteration loop logic
+  formatter.ts      # Stream JSON parsing from Claude output
+  colors.ts         # ANSI color constants
+.ralph/             # State directory (JSON files)
+```
+
+## Key Patterns
+
+### File I/O
+```ts
+// Reading JSON
+const data = await Bun.file(path).json();
+
+// Writing JSON (always 2-space indent)
+await Bun.write(path, JSON.stringify(data, null, 2));
+
+// Shell commands
+await Bun.$`git status`;
+```
+
+### Commands
+Commands are async functions in `src/commands/`. Route them in `cli.ts`:
+```ts
+export async function myCommand(args: string[]) {
+  const dir = checkRepoRoot(); // Always check first
+  // ...
+}
+```
+
+### Executors
+Implement the `Executor` interface for new execution backends:
+```ts
+interface Executor {
+  run(prompt: string): Promise<string>;
+}
+```
+
+Use `createExecutor(sandbox: boolean)` factory from `src/executors/index.ts`.
+
+### State Files
+All state lives in `.ralph/`:
+- `state.json` - Iteration count, status, current feature
+- `backlog.json` - Task list
+- `config.json` - VCS type (git or graphite)
+- `progress.txt` - Append-only log
+
+### Output Formatting
+Use colors from `src/colors.ts`:
+```ts
+import { colors } from "../colors";
+console.log(`${colors.green}Success${colors.reset}`);
+```
 
 ## Testing
 
-Use `bun test` to run tests.
+```ts
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { mkdtemp, rm } from "fs/promises";
+import { tmpdir } from "os";
 
-```ts#index.test.ts
-import { test, expect } from "bun:test";
+describe("feature", () => {
+  let testDir: string;
+  let originalCwd: string;
 
-test("hello world", () => {
-  expect(1).toBe(1);
+  beforeEach(async () => {
+    originalCwd = process.cwd();
+    testDir = await mkdtemp(`${tmpdir()}/test-`);
+    process.chdir(testDir);
+  });
+
+  afterEach(async () => {
+    process.chdir(originalCwd);
+    await rm(testDir, { recursive: true });
+  });
+
+  test("does thing", () => {
+    expect(true).toBe(true);
+  });
 });
 ```
 
-## Frontend
+## Environment Variables
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+- `ANTHROPIC_API_KEY` - Required for Claude execution
+- `GH_TOKEN` - GitHub token for sandbox git operations
+- `DAYTONA_API_KEY` - Daytona sandbox API key
+- `NTFY_URL` - Optional notification URL
 
-Server:
+## CLI Commands
 
-```ts#index.ts
-import index from "./index.html"
+| Command | Purpose |
+|---------|---------|
+| `ralph setup` | Initialize Ralph in a project |
+| `ralph backlog` | Run backlog tasks |
+| `ralph feature <name>` | Run a feature plan |
+| `ralph watch` | Auto-run on task changes |
+| `ralph list` | Show tasks and status |
+| `ralph report <name>` | Interactive feature review |
+| `ralph status` | Show current state |
+| `ralph cancel` | Stop running session |
 
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
-```
+## Exit Codes
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
-
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
-
-With the following `frontend.tsx`:
-
-```tsx#frontend.tsx
-import React from "react";
-
-// import .css files directly and it works
-import './index.css';
-
-import { createRoot } from "react-dom/client";
-
-const root = createRoot(document.body);
-
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
-
-root.render(<Frontend />);
-```
-
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.md`.
+- `0` - Success/completed
+- `1` - Error
+- `2` - Stuck (Claude reported `<promise>STUCK</promise>`)
+- `130` - Cancelled (SIGINT)

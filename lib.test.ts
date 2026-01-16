@@ -13,6 +13,11 @@ import {
   listFeatures,
   readTasksFile,
   getIncompleteTaskTitles,
+  getQueuePath,
+  readQueue,
+  addToQueue,
+  popQueue,
+  isRalphRunning,
 } from "./lib";
 
 describe("getStateFile", () => {
@@ -246,6 +251,105 @@ describe("file operations", () => {
 
       const result = getIncompleteTaskTitles(taskFile);
       expect(result).toEqual(["First", "Second"]);
+    });
+  });
+
+  describe("getQueuePath", () => {
+    test("returns correct path", () => {
+      expect(getQueuePath()).toBe(".ralph/queue.json");
+    });
+  });
+
+  describe("readQueue", () => {
+    test("returns empty array when queue file does not exist", async () => {
+      const result = await readQueue();
+      expect(result).toEqual([]);
+    });
+
+    test("returns items when queue file exists", async () => {
+      await Bun.write(".ralph/queue.json", JSON.stringify({ items: ["foo", "bar"] }));
+      const result = await readQueue();
+      expect(result).toEqual(["foo", "bar"]);
+    });
+
+    test("returns empty array for invalid JSON", async () => {
+      await Bun.write(".ralph/queue.json", "not valid json");
+      const result = await readQueue();
+      expect(result).toEqual([]);
+    });
+
+    test("returns empty array when items field is missing", async () => {
+      await Bun.write(".ralph/queue.json", JSON.stringify({}));
+      const result = await readQueue();
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("addToQueue", () => {
+    test("creates queue file and adds item when file does not exist", async () => {
+      await addToQueue("feature-a");
+      const result = await readQueue();
+      expect(result).toEqual(["feature-a"]);
+    });
+
+    test("appends to existing queue", async () => {
+      await Bun.write(".ralph/queue.json", JSON.stringify({ items: ["first"] }));
+      await addToQueue("second");
+      const result = await readQueue();
+      expect(result).toEqual(["first", "second"]);
+    });
+  });
+
+  describe("popQueue", () => {
+    test("returns null when queue is empty", async () => {
+      const result = await popQueue();
+      expect(result).toBeNull();
+    });
+
+    test("returns null when queue file does not exist", async () => {
+      const result = await popQueue();
+      expect(result).toBeNull();
+    });
+
+    test("removes and returns first item", async () => {
+      await Bun.write(".ralph/queue.json", JSON.stringify({ items: ["a", "b", "c"] }));
+      const result = await popQueue();
+      expect(result).toBe("a");
+      const remaining = await readQueue();
+      expect(remaining).toEqual(["b", "c"]);
+    });
+
+    test("empties queue when last item is popped", async () => {
+      await Bun.write(".ralph/queue.json", JSON.stringify({ items: ["only"] }));
+      const result = await popQueue();
+      expect(result).toBe("only");
+      const remaining = await readQueue();
+      expect(remaining).toEqual([]);
+    });
+  });
+
+  describe("isRalphRunning", () => {
+    test("returns false when state file does not exist", async () => {
+      const result = await isRalphRunning();
+      expect(result).toBe(false);
+    });
+
+    test("returns true when status is 'running'", async () => {
+      await Bun.write(".ralph/state.json", JSON.stringify({ status: "running" }));
+      const result = await isRalphRunning();
+      expect(result).toBe(true);
+    });
+
+    test("returns false when status is not 'running'", async () => {
+      await Bun.write(".ralph/state.json", JSON.stringify({ status: "completed" }));
+      const result = await isRalphRunning();
+      expect(result).toBe(false);
+    });
+
+    test("returns false when status field is missing", async () => {
+      await Bun.write(".ralph/state.json", JSON.stringify({ iteration: 5 }));
+      const result = await isRalphRunning();
+      expect(result).toBe(false);
     });
   });
 });

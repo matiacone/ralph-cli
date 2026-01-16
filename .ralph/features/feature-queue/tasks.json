@@ -1,0 +1,45 @@
+{
+  "tasks": [
+    {
+      "title": "Add queue utilities to lib.ts",
+      "description": "The feature command needs to check if Ralph is already running and manage a queue of pending features. This requires utility functions for reading/writing the queue file and checking the running state.",
+      "acceptance": [
+        "isRalphRunning() returns true when state.status is 'running'",
+        "readQueue() returns empty array when queue file doesn't exist",
+        "addToQueue() appends feature name to queue and creates file if needed",
+        "popQueue() removes and returns first item, returns null if empty"
+      ],
+      "passes": true
+    },
+    {
+      "title": "Modify feature command to queue when busy",
+      "description": "When a user runs `ralph feature X` while another feature is already running, it should add to the queue instead of failing or running concurrently. The user should see feedback that their feature was queued.",
+      "acceptance": [
+        "Running `ralph feature X` while another is running adds X to queue",
+        "User sees a message like 'Queued feature: X'",
+        "If nothing is running, feature executes immediately as before"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Process queue after feature completion",
+      "description": "When a feature run completes (successfully or otherwise), Ralph should check the queue and automatically start the next feature if one exists. This creates a seamless workflow where queued features run in sequence.",
+      "acceptance": [
+        "After feature completes, next queued feature starts automatically",
+        "If queue is empty, Ralph exits normally",
+        "Queue file is updated (item removed) when feature is popped"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Add ralph queue command for visibility",
+      "description": "Users need a way to see what features are currently queued without manually inspecting the JSON file.",
+      "acceptance": [
+        "`ralph queue` shows list of queued features",
+        "Shows helpful message when queue is empty",
+        "Command is routed in cli.ts"
+      ],
+      "passes": false
+    }
+  ]
+}

@@ -91,14 +91,25 @@ export function getBacklogPrompt(vcs: VcsType = "git") {
   const i = VCS_INSTRUCTIONS[vcs];
   return `@.ralph/backlog.json @.ralph/progress.txt
 1. Find the highest-priority task to work on and work only on that task.
-This should be the one YOU decide has the highest priority - not necessarily the first in the array.
+   This should be the one YOU decide has the highest priority - not necessarily the first in the array.
 2. Check that the code is linted via bun run lint:fix, types check via bun run check-types, and tests pass via bun run test.
-3. VERIFICATION: Confirm your changes actually work:
-   - If you made UI changes: Use the Playwriter MCP to visually verify the changes render correctly.
-   - If you added backend routes or logic more complex than basic CRUD: Either write 1-2 unit tests to verify correctness, OR create a test query/mutation in convex/test.ts that logs results and run it via 'npx convex run test:<functionName>' against the live DB.
+3. ⚠️ MANDATORY VERIFICATION - DO NOT SKIP THIS STEP ⚠️
+   You MUST verify your changes actually work before marking the task complete. This is NOT optional.
+
+   For UI changes:
+   → Use the Playwright MCP to visually verify the changes render correctly
+   → Take a screenshot and confirm the UI looks correct
+
+   For backend changes (queries, mutations, actions, or any logic beyond trivial CRUD):
+   → Option A: Write 1-2 unit tests that exercise the new code paths
+   → Option B: Create a test function in convex/test.ts and run it: 'npx convex run test:<functionName>'
+
+   FAILURE TO VERIFY = TASK NOT COMPLETE. If you skip verification, you are lying about the task being done.
+
 4. Update the backlog.json with the work that was done (set passes: true when complete).
+   Include in your progress entry WHAT verification you performed (e.g., "Verified: Playwright screenshot" or "Verified: unit test added" or "Verified: ran test:myFunction").
 5. Append a concise progress entry to progress.txt:
-   Format: [TIMESTAMP] Task: <title> | Branch: <branch> | <1-2 sentence summary of what was done> | Gotchas: <any important learnings/gotchas, or "none">
+   Format: [TIMESTAMP] Task: <title> | Branch: <branch> | Verified: <what verification was done> | <1-2 sentence summary> | Gotchas: <any important learnings, or "none">
 6. Make a git commit and submit PR:
    - Check the current branch with 'git branch --show-current'
    - If you are NOT on the task's branch:
@@ -119,12 +130,23 @@ export function getFeaturePrompt(name: string, vcs: VcsType = "git") {
 2. Review plan.md for context, then find the highest-priority incomplete task in tasks.json.
    This should be the one YOU decide has the highest priority - not necessarily the first in the array.
 3. Implement the task, ensuring code is linted (bun run lint:fix), types check (bun run check-types), and tests pass (bun run test).
-4. VERIFICATION: Confirm your changes actually work:
-   - If you made UI changes: Use the Playwriter MCP to visually verify the changes render correctly.
-   - If you added backend routes or logic more complex than basic CRUD: Either write 1-2 unit tests to verify correctness, OR create a test query/mutation in convex/test.ts that logs results and run it via 'npx convex run test:<functionName>' against the live DB.
+4. ⚠️ MANDATORY VERIFICATION - DO NOT SKIP THIS STEP ⚠️
+   You MUST verify your changes actually work before marking the task complete. This is NOT optional.
+
+   For UI changes:
+   → Use the Playwright MCP to visually verify the changes render correctly
+   → Take a screenshot and confirm the UI looks correct
+
+   For backend changes (queries, mutations, actions, or any logic beyond trivial CRUD):
+   → Option A: Write 1-2 unit tests that exercise the new code paths
+   → Option B: Create a test function in convex/test.ts and run it: 'npx convex run test:<functionName>'
+
+   FAILURE TO VERIFY = TASK NOT COMPLETE. If you skip verification, you are lying about the task being done.
+
 5. Mark the task complete in tasks.json by setting "passes": true.
+   Include in your progress entry WHAT verification you performed (e.g., "Verified: Playwright screenshot" or "Verified: unit test added" or "Verified: ran test:myFunction").
 6. Append a concise progress entry to ${dir}/progress.txt:
-   Format: [TIMESTAMP] Task: <title> | <1-2 sentence summary of what was done> | Gotchas: <any important learnings/gotchas, or "none">
+   Format: [TIMESTAMP] Task: <title> | Verified: <what verification was done> | <1-2 sentence summary> | Gotchas: <any important learnings, or "none">
 7. Make a git commit using the branch from plan.md:
    - Check the current branch with 'git branch --show-current'
    - If you are NOT on the branch specified in plan.md:
@@ -196,13 +218,16 @@ ${gitDiff}
 
 You are reviewing the progress of the "${name}" feature.
 ${taskSummary}${gitSection}${diffSection}
-Help the user understand:
+Provide a critical analysis:
 - What has been accomplished so far
 - What tasks remain and their priority
-- Any patterns or issues visible in the progress log
-- Recommendations for next steps
+- Code smells, anti-patterns, or questionable design decisions you notice
+- Overly complex solutions where simpler alternatives exist
+- Missing error handling, edge cases, or potential bugs
+- Inconsistencies with project conventions or best practices
+- Concrete recommendations for improvement
 
-Be conversational. The user may ask follow-up questions about the feature, code, or implementation approach.`;
+Be direct and honest. Don't sugarcoat issues - the goal is to catch problems early. Point out specific files and line numbers when identifying issues. The user may ask follow-up questions about the feature, code, or implementation approach.`;
 }
 
 export interface TaskFile {
@@ -282,4 +307,42 @@ export async function getCurrentBranch(): Promise<string> {
       `Failed to get current git branch: ${error instanceof Error ? error.message : "Unknown error"}. Make sure you're in a git repository.`
     );
   }
+}
+
+export function getQueuePath(): string {
+  return ".ralph/queue.json";
+}
+
+interface QueueFile {
+  items: string[];
+}
+
+export async function readQueue(): Promise<string[]> {
+  const file = Bun.file(getQueuePath());
+  if (!(await file.exists())) return [];
+  try {
+    const data: QueueFile = await file.json();
+    return data.items ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function addToQueue(featureName: string): Promise<void> {
+  const items = await readQueue();
+  items.push(featureName);
+  await Bun.write(getQueuePath(), JSON.stringify({ items }, null, 2));
+}
+
+export async function popQueue(): Promise<string | null> {
+  const items = await readQueue();
+  if (items.length === 0) return null;
+  const next = items.shift()!;
+  await Bun.write(getQueuePath(), JSON.stringify({ items }, null, 2));
+  return next;
+}
+
+export async function isRalphRunning(): Promise<boolean> {
+  const state = await readState();
+  return state?.status === "running";
 }

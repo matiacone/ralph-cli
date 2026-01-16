@@ -1,4 +1,4 @@
-import { listOpenFeatures } from "../lib";
+import { listOpenFeatures, listFeatures } from "../lib";
 
 export const BASH_COMPLETION_SCRIPT = `# Ralph CLI bash completion
 # Install: ralph completions bash >> ~/.bashrc
@@ -15,21 +15,21 @@ _ralph_completions() {
       return ;;
     feature)
       if [[ \${cur} == -* ]]; then
-        COMPREPLY=( \$(compgen -W "--once" -- "\${cur}") )
+        COMPREPLY=( \$(compgen -W "--once --sandbox" -- "\${cur}") )
       elif [[ \${cword} -eq 2 ]]; then
-        local features=\$(ralph completions --list-features 2>/dev/null)
+        local features=\$(ralph completions --list-features open 2>/dev/null)
         COMPREPLY=( \$(compgen -W "\${features}" -- "\${cur}") )
       fi
       return ;;
     backlog)
-      [[ \${cur} == -* ]] && COMPREPLY=( \$(compgen -W "--once --max-iterations --resume" -- "\${cur}") )
+      [[ \${cur} == -* ]] && COMPREPLY=( \$(compgen -W "--once --max-iterations --resume --sandbox" -- "\${cur}") )
       return ;;
     watch)
       [[ \${cur} == -* ]] && COMPREPLY=( \$(compgen -W "--stream" -- "\${cur}") )
       return ;;
     report)
       if [[ \${cword} -eq 2 ]]; then
-        local features=\$(ralph completions --list-features 2>/dev/null)
+        local features=\$(ralph completions --list-features all 2>/dev/null)
         COMPREPLY=( \$(compgen -W "\${features}" -- "\${cur}") )
       fi
       return ;;
@@ -46,8 +46,10 @@ complete -F _ralph_completions ralph
 `;
 
 export async function completions(args: string[]) {
-  if (args.includes("--list-features")) {
-    const features = await listOpenFeatures();
+  const listFeaturesIdx = args.indexOf("--list-features");
+  if (listFeaturesIdx !== -1) {
+    const type = args[listFeaturesIdx + 1];
+    const features = type === "all" ? await listFeatures() : await listOpenFeatures();
     for (const f of features) console.log(f);
     return;
   }

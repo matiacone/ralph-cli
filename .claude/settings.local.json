@@ -17,7 +17,12 @@
       "Bash(git commit:*)",
       "Bash(git branch:*)",
       "Bash(git push:*)",
-      "WebFetch(domain:www.daytona.io)"
+      "WebFetch(domain:www.daytona.io)",
+      "Bash(git ls-tree:*)",
+      "Bash(wc:*)"
+    ],
+    "additionalDirectories": [
+      "/home/mathew/creations/deal-deploy"
     ]
   }
 }
