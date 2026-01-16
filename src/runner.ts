@@ -5,6 +5,10 @@ import {
   readState,
   writeState,
   hasOpenTasks,
+  popQueue,
+  readConfig,
+  getFeatureDir,
+  getFeaturePrompt,
   type TaskFile,
 } from "../lib";
 import type { Executor } from "./executor";
@@ -42,6 +46,38 @@ export async function runSingleIteration(config: RunnerConfig): Promise<Iteratio
 export interface LoopConfig extends RunnerConfig {
   maxIterations?: number;
   startIteration?: number;
+}
+
+async function runNextFromQueue(): Promise<boolean> {
+  const next = await popQueue();
+  if (!next) return false;
+
+  console.log(`\n${c.cyan}Starting next queued feature:${c.reset} ${next}\n`);
+
+  const config = await readConfig();
+  const dir = getFeatureDir(next);
+  const tasksFilePath = `${dir}/tasks.json`;
+
+  const tasksFile = Bun.file(tasksFilePath);
+  if (!(await tasksFile.exists())) {
+    console.error(`${c.yellow}Queued feature '${next}' not found, skipping${c.reset}`);
+    return runNextFromQueue();
+  }
+
+  const progressFile = Bun.file(`${dir}/progress.txt`);
+  if (!(await progressFile.exists())) {
+    await Bun.write(progressFile, "");
+  }
+
+  const prompt = getFeaturePrompt(next, config.vcs);
+  await runLoop({
+    prompt,
+    featureName: next,
+    tasksFilePath,
+    label: `Feature: ${next}`,
+  });
+
+  return true;
 }
 
 export async function runLoop(config: LoopConfig): Promise<void> {
@@ -126,6 +162,11 @@ export async function runLoop(config: LoopConfig): Promise<void> {
         await writeState({ ...state, iteration: i, status: "completed", feature: featureName });
         await notify("Ralph Complete", `${label} complete after ${i} iterations`);
         await executor.cleanup();
+
+        // Check queue for next feature
+        const ranNext = await runNextFromQueue();
+        if (ranNext) return;
+
         process.exit(0);
       }
 

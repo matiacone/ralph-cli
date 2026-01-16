@@ -398,4 +398,46 @@ describe("file operations", () => {
       expect(queue).toEqual([]);
     });
   });
+
+  describe("queue processing after completion", () => {
+    test("popQueue removes item from queue when called", async () => {
+      // Set up queue with multiple features
+      await Bun.write(".ralph/queue.json", JSON.stringify({ items: ["next-feature", "after-that"] }));
+
+      // Pop the first item (this simulates what runNextFromQueue does)
+      const next = await popQueue();
+      expect(next).toBe("next-feature");
+
+      // Verify queue was updated
+      const remaining = await readQueue();
+      expect(remaining).toEqual(["after-that"]);
+    });
+
+    test("popQueue returns null when queue is empty after completion", async () => {
+      // Empty queue
+      await Bun.write(".ralph/queue.json", JSON.stringify({ items: [] }));
+
+      const next = await popQueue();
+      expect(next).toBeNull();
+    });
+
+    test("simulates full queue processing cycle", async () => {
+      // Queue starts with two features
+      await Bun.write(".ralph/queue.json", JSON.stringify({ items: ["feature-1", "feature-2"] }));
+
+      // First feature completes, pop next
+      const first = await popQueue();
+      expect(first).toBe("feature-1");
+      expect(await readQueue()).toEqual(["feature-2"]);
+
+      // Second feature completes, pop next
+      const second = await popQueue();
+      expect(second).toBe("feature-2");
+      expect(await readQueue()).toEqual([]);
+
+      // No more in queue
+      const third = await popQueue();
+      expect(third).toBeNull();
+    });
+  });
 });

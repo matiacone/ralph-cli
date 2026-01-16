@@ -29,7 +29,7 @@
         "If queue is empty, Ralph exits normally",
         "Queue file is updated (item removed) when feature is popped"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Add ralph queue command for visibility",
