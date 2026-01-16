@@ -65,7 +65,24 @@ export async function setup(args: string[]) {
     startedAt: new Date().toISOString(),
   });
 
-  console.log(`✓ State initialized (max ${maxIterations} iterations)\n`);
+  console.log(`✓ State initialized (max ${maxIterations} iterations)`);
+
+  // Add runtime files to .gitignore
+  const gitignorePath = ".gitignore";
+  const gitignoreFile = Bun.file(gitignorePath);
+  const entriesToAdd = [".ralph/state.json", ".ralph/queue.json"];
+
+  let gitignoreContent = (await gitignoreFile.exists()) ? await gitignoreFile.text() : "";
+  const lines = gitignoreContent.split("\n");
+  const missingEntries = entriesToAdd.filter((entry) => !lines.some((line) => line.trim() === entry));
+
+  if (missingEntries.length > 0) {
+    const newContent = gitignoreContent.trimEnd() + "\n" + missingEntries.join("\n") + "\n";
+    await Bun.write(gitignorePath, newContent);
+    console.log(`✓ Added to .gitignore: ${missingEntries.join(", ")}`);
+  }
+
+  console.log("");
   console.log("✅ Ralph is ready!");
   console.log("\nNext steps:");
   console.log("  ralph backlog --once  - Test single backlog iteration");

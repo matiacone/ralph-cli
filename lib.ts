@@ -317,32 +317,71 @@ interface QueueFile {
   items: string[];
 }
 
+// Debug logging - imported dynamically to avoid circular deps
+let debugFn: ((ctx: string, msg: string, data?: Record<string, unknown>) => void) | null = null;
+export function setQueueDebugger(fn: (ctx: string, msg: string, data?: Record<string, unknown>) => void) {
+  debugFn = fn;
+}
+
 export async function readQueue(): Promise<string[]> {
-  const file = Bun.file(getQueuePath());
-  if (!(await file.exists())) return [];
+  const path = getQueuePath();
+  debugFn?.("readQueue", `Reading queue from ${path}`);
+
+  const file = Bun.file(path);
+  const exists = await file.exists();
+  debugFn?.("readQueue", `File exists: ${exists}`);
+
+  if (!exists) {
+    debugFn?.("readQueue", "Returning empty array (file doesn't exist)");
+    return [];
+  }
+
   try {
-    const data: QueueFile = await file.json();
-    return data.items ?? [];
-  } catch {
+    const text = await file.text();
+    debugFn?.("readQueue", `Raw file content: ${text}`);
+    const data: QueueFile = JSON.parse(text);
+    const items = data.items ?? [];
+    debugFn?.("readQueue", `Parsed items`, { items });
+    return items;
+  } catch (err) {
+    debugFn?.("readQueue", `Parse error: ${err}`);
     return [];
   }
 }
 
 export async function addToQueue(featureName: string): Promise<void> {
+  debugFn?.("addToQueue", `Adding "${featureName}" to queue`);
   const items = await readQueue();
   items.push(featureName);
-  await Bun.write(getQueuePath(), JSON.stringify({ items }, null, 2));
+  const content = JSON.stringify({ items }, null, 2);
+  debugFn?.("addToQueue", `Writing queue`, { items });
+  await Bun.write(getQueuePath(), content);
+  debugFn?.("addToQueue", "Write complete");
 }
 
 export async function popQueue(): Promise<string | null> {
+  debugFn?.("popQueue", "Popping from queue");
   const items = await readQueue();
-  if (items.length === 0) return null;
+  debugFn?.("popQueue", `Current items`, { items, length: items.length });
+
+  if (items.length === 0) {
+    debugFn?.("popQueue", "Queue empty, returning null");
+    return null;
+  }
+
   const next = items.shift()!;
-  await Bun.write(getQueuePath(), JSON.stringify({ items }, null, 2));
+  debugFn?.("popQueue", `Popped "${next}", remaining`, { remaining: items });
+
+  const content = JSON.stringify({ items }, null, 2);
+  await Bun.write(getQueuePath(), content);
+  debugFn?.("popQueue", `Wrote updated queue, returning "${next}"`);
+
   return next;
 }
 
 export async function isRalphRunning(): Promise<boolean> {
   const state = await readState();
-  return state?.status === "running";
+  const running = state?.status === "running";
+  debugFn?.("isRalphRunning", `Status: ${state?.status}, running: ${running}`);
+  return running;
 }

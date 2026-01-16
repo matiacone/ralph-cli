@@ -6,13 +6,28 @@ import {
   writeState,
   hasOpenTasks,
   popQueue,
+  readQueue,
   readConfig,
   getFeatureDir,
   getFeaturePrompt,
+  setQueueDebugger,
   type TaskFile,
 } from "../lib";
 import type { Executor } from "./executor";
 import { LocalExecutor } from "./executors/local";
+import { debug, setDebug } from "./debug";
+
+const CODE_SIMPLIFIER_PROMPT = `Use the Task tool to spawn the code-simplifier agent to analyze recently modified code. After it completes, review its recommendations and add any worthwhile improvements to .ralph/backlog.json as new tasks. Mark new tasks with "passes": false.`;
+
+async function runCodeSimplifier(): Promise<void> {
+  console.log(`\n${c.cyan}Running code simplifier...${c.reset}\n`);
+
+  const proc = Bun.spawn(["claude", "--permission-mode", "acceptEdits", CODE_SIMPLIFIER_PROMPT], {
+    stdio: ["inherit", "inherit", "inherit"],
+  });
+
+  await proc.exited;
+}
 
 export interface RunnerConfig {
   prompt: string;
@@ -46,22 +61,39 @@ export async function runSingleIteration(config: RunnerConfig): Promise<Iteratio
 export interface LoopConfig extends RunnerConfig {
   maxIterations?: number;
   startIteration?: number;
+  debug?: boolean;
 }
 
-async function runNextFromQueue(): Promise<boolean> {
+async function runNextFromQueue(debugMode: boolean = false): Promise<boolean> {
+  debug("runNextFromQueue", "Starting queue check");
+
+  // Log queue state before popping
+  const queueBefore = await readQueue();
+  debug("runNextFromQueue", "Queue state before pop", { items: queueBefore });
+
   const next = await popQueue();
-  if (!next) return false;
+  debug("runNextFromQueue", `popQueue returned: ${next ?? "null"}`);
+
+  if (!next) {
+    debug("runNextFromQueue", "No items in queue, returning false");
+    return false;
+  }
 
   console.log(`\n${c.cyan}Starting next queued feature:${c.reset} ${next}\n`);
 
   const config = await readConfig();
   const dir = getFeatureDir(next);
   const tasksFilePath = `${dir}/tasks.json`;
+  debug("runNextFromQueue", `Feature dir: ${dir}, tasks: ${tasksFilePath}`);
 
   const tasksFile = Bun.file(tasksFilePath);
-  if (!(await tasksFile.exists())) {
+  const exists = await tasksFile.exists();
+  debug("runNextFromQueue", `Tasks file exists: ${exists}`);
+
+  if (!exists) {
     console.error(`${c.yellow}Queued feature '${next}' not found, skipping${c.reset}`);
-    return runNextFromQueue();
+    debug("runNextFromQueue", "Feature not found, recursing to next");
+    return runNextFromQueue(debugMode);
   }
 
   const progressFile = Bun.file(`${dir}/progress.txt`);
@@ -70,19 +102,31 @@ async function runNextFromQueue(): Promise<boolean> {
   }
 
   const prompt = getFeaturePrompt(next, config.vcs);
+  debug("runNextFromQueue", `Starting runLoop for "${next}"`);
+
   await runLoop({
     prompt,
     featureName: next,
     tasksFilePath,
     label: `Feature: ${next}`,
+    debug: debugMode,
   });
 
+  debug("runNextFromQueue", `runLoop completed for "${next}"`);
   return true;
 }
 
 export async function runLoop(config: LoopConfig): Promise<void> {
   const { prompt, featureName, tasksFilePath, label, maxIterations, startIteration } = config;
 
+  // Initialize debug mode
+  if (config.debug) {
+    setDebug(true);
+    setQueueDebugger(debug);
+    debug("runLoop", "Debug mode enabled");
+  }
+
+  debug("runLoop", `Starting loop for "${featureName}"`, { tasksFilePath, label });
   console.log(`🤖 Ralph ${label} - Autonomous Loop\n`);
 
   const state = await readState();
@@ -149,24 +193,50 @@ export async function runLoop(config: LoopConfig): Promise<void> {
       }
 
       const taskFileContent = await executor.readFile(tasksFilePath);
+      debug("runLoop", `Read tasks file, content length: ${taskFileContent?.length ?? 0}`);
+
       let taskFile: TaskFile | null = null;
       if (taskFileContent) {
         try {
           taskFile = JSON.parse(taskFileContent) as TaskFile;
-        } catch {
+          debug("runLoop", "Parsed tasks file", {
+            taskCount: taskFile.tasks.length,
+            openTasks: taskFile.tasks.filter((t) => !t.passes).length,
+          });
+        } catch (err) {
+          debug("runLoop", `Failed to parse tasks file: ${err}`);
           taskFile = null;
         }
       }
-      if (taskFile && !hasOpenTasks(taskFile)) {
+
+      const allComplete = taskFile && !hasOpenTasks(taskFile);
+      debug("runLoop", `All tasks complete: ${allComplete}`);
+
+      if (allComplete) {
         console.log("\n✅ All tasks complete!");
+        debug("runLoop", "Writing completed state");
         await writeState({ ...state, iteration: i, status: "completed", feature: featureName });
+
+        debug("runLoop", "Sending notification");
         await notify("Ralph Complete", `${label} complete after ${i} iterations`);
+
+        debug("runLoop", "Running code simplifier");
+        await runCodeSimplifier();
+
+        debug("runLoop", "Running executor cleanup");
         await executor.cleanup();
 
         // Check queue for next feature
-        const ranNext = await runNextFromQueue();
-        if (ranNext) return;
+        debug("runLoop", "About to check queue for next feature");
+        const ranNext = await runNextFromQueue(config.debug);
+        debug("runLoop", `runNextFromQueue returned: ${ranNext}`);
 
+        if (ranNext) {
+          debug("runLoop", "Next feature started, returning from runLoop");
+          return;
+        }
+
+        debug("runLoop", "No queued features, exiting with code 0");
         process.exit(0);
       }
 

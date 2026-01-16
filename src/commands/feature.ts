@@ -28,6 +28,7 @@ export async function feature(args: string[]) {
   }
   const once = args.includes("--once");
   const sandbox = args.includes("--sandbox");
+  const debugMode = args.includes("--debug");
 
   if (sandbox && once) {
     console.error("❌ --sandbox and --once cannot be used together");
@@ -96,5 +97,5 @@ export async function feature(args: string[]) {
     executor = await createExecutor({ sandbox: true, repoUrl, branch });
   }
 
-  await runLoop({ ...runnerConfig, executor });
+  await runLoop({ ...runnerConfig, executor, debug: debugMode });
 }

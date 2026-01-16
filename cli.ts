@@ -13,6 +13,7 @@ import { list } from "./src/commands/list";
 import { cancel } from "./src/commands/cancel";
 import { report } from "./src/commands/report";
 import { queue } from "./src/commands/queue";
+import { testQueue } from "./src/commands/test-queue";
 import { help } from "./src/commands/help";
 import { completions } from "./src/completions";
 
@@ -45,6 +46,9 @@ switch (command) {
     break;
   case "queue":
     await queue();
+    break;
+  case "test-queue":
+    await testQueue(args);
     break;
   case "completions":
     await completions(args);

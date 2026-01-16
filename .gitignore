@@ -32,3 +32,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# Ralph runtime state
+.ralph/state.json
+.ralph/queue.json
