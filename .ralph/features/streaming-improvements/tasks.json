@@ -45,7 +45,7 @@
         "Long text blocks are truncated",
         "bun test passes"
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }
