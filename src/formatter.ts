@@ -6,6 +6,7 @@ export class StreamFormatter {
   private codeBlockLang = "";
   private lineBuffer = "";
   private assistantText = "";
+  private toolNames = new Map<string, string>();
 
   reset() {
     this.buffer = "";
@@ -13,6 +14,7 @@ export class StreamFormatter {
     this.codeBlockLang = "";
     this.lineBuffer = "";
     this.assistantText = "";
+    this.toolNames.clear();
   }
 
   getAssistantText(): string {
@@ -67,6 +69,55 @@ export class StreamFormatter {
           return ` ${c.dim}"${input.query}"${c.reset}`;
         }
         break;
+    }
+    return "";
+  }
+
+  private formatToolResult(
+    toolName: string,
+    content: string | Array<{ type: string; text?: string }>
+  ): string {
+    const text = Array.isArray(content)
+      ? content
+          .filter((b) => b.type === "text" && b.text)
+          .map((b) => b.text)
+          .join("\n")
+      : content ?? "";
+
+    switch (toolName) {
+      case "Read": {
+        if (!text) return `${c.dim}→ empty${c.reset}`;
+        const lines = text.split("\n").length;
+        return `${c.dim}→ ${lines} lines${c.reset}`;
+      }
+      case "Grep": {
+        const matches = text.split("\n").filter((l) => l.trim()).length;
+        if (matches === 0) return `${c.dim}→ no matches${c.reset}`;
+        return `${c.dim}→ ${matches} ${matches === 1 ? "file" : "files"}${c.reset}`;
+      }
+      case "Glob": {
+        const files = text.split("\n").filter((l) => l.trim()).length;
+        if (files === 0) return `${c.dim}→ no files${c.reset}`;
+        return `${c.dim}→ ${files} ${files === 1 ? "file" : "files"}${c.reset}`;
+      }
+      case "Bash": {
+        const lines = text.split("\n").filter((l) => l.trim());
+        const firstLine = lines[0];
+        if (!firstLine) return `${c.dim}→ (empty)${c.reset}`;
+        const preview = firstLine.slice(0, 60);
+        const truncated = firstLine.length > 60 ? preview + "..." : preview;
+        const more = lines.length > 1 ? ` (+${lines.length - 1} lines)` : "";
+        return `${c.dim}→ ${truncated}${more}${c.reset}`;
+      }
+      case "Edit":
+      case "Write":
+      case "NotebookEdit":
+        return `${c.dim}→ ✓${c.reset}`;
+      case "Task":
+        return `${c.dim}→ completed${c.reset}`;
+      case "WebFetch":
+      case "WebSearch":
+        return `${c.dim}→ fetched${c.reset}`;
     }
     return "";
   }
@@ -154,6 +205,25 @@ export class StreamFormatter {
               const toolName = block.name;
               const toolInput = this.formatToolInput(toolName, block.input);
               output += `\n${c.dim}─── ${c.yellow}${toolName}${c.reset}${toolInput}${c.dim} ───${c.reset}\n`;
+              // Store tool ID -> name mapping for result display
+              if (block.id) {
+                this.toolNames.set(block.id, toolName);
+              }
+            }
+          }
+        }
+
+        // Handle user events with tool results
+        if (event.type === "user" && event.message?.content) {
+          for (const block of event.message.content) {
+            if (block.type === "tool_result" && block.tool_use_id) {
+              const toolName = this.toolNames.get(block.tool_use_id);
+              if (toolName) {
+                const resultSummary = this.formatToolResult(toolName, block.content);
+                if (resultSummary) {
+                  output += `${resultSummary}\n`;
+                }
+              }
             }
           }
         }

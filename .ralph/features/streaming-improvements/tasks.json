@@ -22,7 +22,7 @@
         "Edit results indicate success",
         "Run ralph and confirm result summaries appear"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Truncate long text blocks between tool calls",
