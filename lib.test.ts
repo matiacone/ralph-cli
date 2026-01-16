@@ -18,7 +18,9 @@ import {
   addToQueue,
   popQueue,
   isRalphRunning,
+  checkRepoRoot,
 } from "./lib";
+import { queue } from "./src/commands/queue";
 
 describe("getStateFile", () => {
   test("returns correct path", () => {
@@ -438,6 +440,50 @@ describe("file operations", () => {
       // No more in queue
       const third = await popQueue();
       expect(third).toBeNull();
+    });
+  });
+
+  describe("queue command", () => {
+    test("shows empty message when queue is empty", async () => {
+      await Bun.write("package.json", "{}");
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      await queue();
+
+      console.log = originalLog;
+      expect(logs.some((log) => log.includes("Queue is empty"))).toBe(true);
+    });
+
+    test("shows queued features when queue has items", async () => {
+      await Bun.write("package.json", "{}");
+      await Bun.write(".ralph/queue.json", JSON.stringify({ items: ["auth", "payments"] }));
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      await queue();
+
+      console.log = originalLog;
+      expect(logs.some((log) => log.includes("Queued features"))).toBe(true);
+      expect(logs.some((log) => log.includes("auth"))).toBe(true);
+      expect(logs.some((log) => log.includes("payments"))).toBe(true);
+    });
+
+    test("shows numbered list of queued features", async () => {
+      await Bun.write("package.json", "{}");
+      await Bun.write(".ralph/queue.json", JSON.stringify({ items: ["first", "second", "third"] }));
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      await queue();
+
+      console.log = originalLog;
+      expect(logs.some((log) => log.includes("1.") && log.includes("first"))).toBe(true);
+      expect(logs.some((log) => log.includes("2.") && log.includes("second"))).toBe(true);
+      expect(logs.some((log) => log.includes("3.") && log.includes("third"))).toBe(true);
     });
   });
 });

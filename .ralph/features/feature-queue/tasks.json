@@ -39,7 +39,7 @@
         "Shows helpful message when queue is empty",
         "Command is routed in cli.ts"
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }

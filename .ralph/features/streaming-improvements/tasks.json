@@ -1,0 +1,51 @@
+{
+  "tasks": [
+    {
+      "title": "Show tool input parameters in streaming output",
+      "description": "When Claude uses tools like Read, Write, Edit, Bash, Grep, Glob, the user currently only sees the tool name. They should also see key parameters like file paths, commands, and patterns to understand what's happening.",
+      "acceptance": [
+        "Read/Write/Edit tools show the file_path parameter",
+        "Bash tool shows the description or truncated command",
+        "Grep tool shows the pattern and path",
+        "Glob tool shows the pattern",
+        "Run ralph and confirm tool inputs are visible"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Show abbreviated tool results",
+      "description": "After tool execution, users should see a brief summary of results so they know what happened without seeing full output. This helps understand progress without overwhelming the terminal.",
+      "acceptance": [
+        "Read results show line count (e.g., '124 lines')",
+        "Grep results show match count (e.g., '13 files')",
+        "Bash results show first few lines of stdout",
+        "Edit results indicate success",
+        "Run ralph and confirm result summaries appear"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Truncate long text blocks between tool calls",
+      "description": "Claude often outputs long explanations of what it's doing or listing many changes. These big text blocks are hard to scan. Truncating to ~10 lines with an indicator makes output more digestible.",
+      "acceptance": [
+        "Text output is limited to ~10 lines between tool calls",
+        "When truncated, shows '[...continuing...]' indicator",
+        "Line counter resets when a new tool call starts",
+        "Run ralph and confirm long text blocks are truncated"
+      ],
+      "passes": false
+    },
+    {
+      "title": "Verify streaming improvements end-to-end",
+      "description": "Run ralph on a real feature to verify the streaming improvements work as expected. The output should be more scannable with tool inputs/results visible and long text blocks truncated.",
+      "acceptance": [
+        "Run `ralph feature streaming-improvements` or similar",
+        "Tool calls show file paths and commands",
+        "Tool results show abbreviated summaries",
+        "Long text blocks are truncated",
+        "bun test passes"
+      ],
+      "passes": false
+    }
+  ]
+}
