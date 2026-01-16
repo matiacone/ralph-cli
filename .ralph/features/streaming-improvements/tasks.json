@@ -33,7 +33,7 @@
         "Line counter resets when a new tool call starts",
         "Run ralph and confirm long text blocks are truncated"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Verify streaming improvements end-to-end",

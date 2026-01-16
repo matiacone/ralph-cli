@@ -7,6 +7,9 @@ export class StreamFormatter {
   private lineBuffer = "";
   private assistantText = "";
   private toolNames = new Map<string, string>();
+  private textLineCount = 0;
+  private maxTextLines = 10;
+  private truncated = false;
 
   reset() {
     this.buffer = "";
@@ -15,6 +18,13 @@ export class StreamFormatter {
     this.lineBuffer = "";
     this.assistantText = "";
     this.toolNames.clear();
+    this.textLineCount = 0;
+    this.truncated = false;
+  }
+
+  private resetTextTruncation() {
+    this.textLineCount = 0;
+    this.truncated = false;
   }
 
   getAssistantText(): string {
@@ -178,6 +188,23 @@ export class StreamFormatter {
     this.lineBuffer = lines.pop() || "";
 
     for (const line of lines) {
+      // Skip empty lines for counting purposes
+      const isContentLine = line.trim().length > 0;
+
+      if (isContentLine) {
+        this.textLineCount++;
+      }
+
+      // If we've exceeded max lines, show truncation indicator once
+      if (this.textLineCount > this.maxTextLines) {
+        if (!this.truncated) {
+          this.truncated = true;
+          output += `${c.dim}[...continuing...]${c.reset}\n`;
+        }
+        // Still accumulate assistantText but don't output
+        continue;
+      }
+
       output += this.formatLine(line);
     }
 
@@ -202,6 +229,12 @@ export class StreamFormatter {
               this.assistantText += block.text;
               output += this.formatText(block.text);
             } else if (block.type === "tool_use") {
+              // Flush any remaining line buffer
+              if (this.lineBuffer) {
+                this.lineBuffer = "";
+              }
+              // Reset text truncation for new tool call
+              this.resetTextTruncation();
               const toolName = block.name;
               const toolInput = this.formatToolInput(toolName, block.input);
               output += `\n${c.dim}─── ${c.yellow}${toolName}${c.reset}${toolInput}${c.dim} ───${c.reset}\n`;
