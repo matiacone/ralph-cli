@@ -7,6 +7,7 @@ import {
   getFeatureDir,
   getFeaturePrompt,
   getBacklogPrompt,
+  getHookPrompt,
   readState,
   writeState,
   readBacklog,
@@ -38,64 +39,100 @@ describe("getFeatureDir", () => {
   });
 });
 
-describe("getFeaturePrompt", () => {
-  test("returns prompt containing feature directory", () => {
-    const prompt = getFeaturePrompt("auth");
-    expect(prompt).toContain("@.ralph/features/auth/plan.md");
-    expect(prompt).toContain("@.ralph/features/auth/tasks.json");
-    expect(prompt).toContain("@.ralph/features/auth/progress.txt");
+describe("prompt functions", () => {
+  let tempDir: string;
+  let originalCwd: string;
+
+  beforeEach(async () => {
+    originalCwd = process.cwd();
+    tempDir = await mkdtemp(join(tmpdir(), "ralph-prompt-test-"));
+    process.chdir(tempDir);
+    await Bun.$`mkdir -p .ralph/prompts/hooks`.quiet();
+
+    // Create default prompt files
+    await Bun.write(
+      ".ralph/prompts/backlog.md",
+      `Find tasks in backlog.json.
+bun run lint:fix
+bun run check-types
+bun run test
+<promise>STUCK</promise>`
+    );
+    await Bun.write(
+      ".ralph/prompts/feature.md",
+      `Find tasks in tasks.json.
+bun run lint:fix
+bun run check-types
+bun run test
+<promise>STUCK</promise>`
+    );
+    await Bun.write(".ralph/prompts/hooks/on-complete.md", "Run code simplifier");
+    await Bun.write(".ralph/prompts/hooks/on-iteration.md", "Review changes");
   });
 
-  test("contains required instructions", () => {
-    const prompt = getFeaturePrompt("test");
-    expect(prompt).toContain("bun run lint:fix");
-    expect(prompt).toContain("bun run check-types");
-    expect(prompt).toContain("bun run test");
-    expect(prompt).toContain("<promise>STUCK</promise>");
+  afterEach(async () => {
+    process.chdir(originalCwd);
+    await rm(tempDir, { recursive: true, force: true });
   });
 
-  test("uses git commands by default", () => {
-    const prompt = getFeaturePrompt("test");
-    expect(prompt).toContain("git checkout -b");
-    expect(prompt).toContain("git push");
-    expect(prompt).toContain("gh pr create");
+  describe("getFeaturePrompt", () => {
+    test("returns prompt containing feature directory", async () => {
+      const prompt = await getFeaturePrompt("auth");
+      expect(prompt).toContain("@.ralph/features/auth/plan.md");
+      expect(prompt).toContain("@.ralph/features/auth/tasks.json");
+      expect(prompt).toContain("@.ralph/features/auth/progress.txt");
+    });
+
+    test("contains required instructions from prompt file", async () => {
+      const prompt = await getFeaturePrompt("test");
+      expect(prompt).toContain("bun run lint:fix");
+      expect(prompt).toContain("bun run check-types");
+      expect(prompt).toContain("bun run test");
+      expect(prompt).toContain("<promise>STUCK</promise>");
+    });
+
+    test("throws error when prompt file missing", async () => {
+      await rm(".ralph/prompts/feature.md");
+      await expect(getFeaturePrompt("test")).rejects.toThrow("Prompts not found");
+    });
   });
 
-  test("uses graphite commands when vcs is graphite", () => {
-    const prompt = getFeaturePrompt("test", "graphite");
-    expect(prompt).toContain("gt create");
-    expect(prompt).toContain("gt modify");
-    expect(prompt).toContain("gt submit");
-  });
-});
+  describe("getBacklogPrompt", () => {
+    test("contains backlog file references", async () => {
+      const prompt = await getBacklogPrompt();
+      expect(prompt).toContain("@.ralph/backlog.json");
+      expect(prompt).toContain("@.ralph/progress.txt");
+    });
 
-describe("getBacklogPrompt", () => {
-  test("contains backlog file references", () => {
-    const prompt = getBacklogPrompt();
-    expect(prompt).toContain("@.ralph/backlog.json");
-    expect(prompt).toContain("@.ralph/progress.txt");
-  });
+    test("contains required instructions from prompt file", async () => {
+      const prompt = await getBacklogPrompt();
+      expect(prompt).toContain("bun run lint:fix");
+      expect(prompt).toContain("bun run check-types");
+      expect(prompt).toContain("bun run test");
+      expect(prompt).toContain("<promise>STUCK</promise>");
+    });
 
-  test("contains required instructions", () => {
-    const prompt = getBacklogPrompt();
-    expect(prompt).toContain("bun run lint:fix");
-    expect(prompt).toContain("bun run check-types");
-    expect(prompt).toContain("bun run test");
-    expect(prompt).toContain("<promise>STUCK</promise>");
+    test("throws error when prompt file missing", async () => {
+      await rm(".ralph/prompts/backlog.md");
+      await expect(getBacklogPrompt()).rejects.toThrow("Prompts not found");
+    });
   });
 
-  test("uses git commands by default", () => {
-    const prompt = getBacklogPrompt();
-    expect(prompt).toContain("git checkout -b");
-    expect(prompt).toContain("git push");
-    expect(prompt).toContain("gh pr create");
-  });
+  describe("getHookPrompt", () => {
+    test("returns hook content when file exists", async () => {
+      const prompt = await getHookPrompt("on-complete");
+      expect(prompt).toBe("Run code simplifier");
+    });
 
-  test("uses graphite commands when vcs is graphite", () => {
-    const prompt = getBacklogPrompt("graphite");
-    expect(prompt).toContain("gt create");
-    expect(prompt).toContain("gt modify");
-    expect(prompt).toContain("gt submit");
+    test("returns null when hook file does not exist", async () => {
+      const prompt = await getHookPrompt("nonexistent");
+      expect(prompt).toBeNull();
+    });
+
+    test("returns on-iteration hook", async () => {
+      const prompt = await getHookPrompt("on-iteration");
+      expect(prompt).toBe("Review changes");
+    });
   });
 });
 

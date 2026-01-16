@@ -7,9 +7,9 @@ import {
   hasOpenTasks,
   popQueue,
   readQueue,
-  readConfig,
   getFeatureDir,
   getFeaturePrompt,
+  getHookPrompt,
   setQueueDebugger,
   type TaskFile,
 } from "../lib";
@@ -17,12 +17,16 @@ import type { Executor } from "./executor";
 import { LocalExecutor } from "./executors/local";
 import { debug, setDebug } from "./debug";
 
-const CODE_SIMPLIFIER_PROMPT = `Use the Task tool to spawn the code-simplifier agent to analyze recently modified code. After it completes, review its recommendations and add any worthwhile improvements to .ralph/backlog.json as new tasks. Mark new tasks with "passes": false.`;
+async function runHook(hookName: string): Promise<void> {
+  const prompt = await getHookPrompt(hookName);
+  if (!prompt) {
+    debug("runHook", `Hook "${hookName}" not found, skipping`);
+    return;
+  }
 
-async function runCodeSimplifier(): Promise<void> {
-  console.log(`\n${c.cyan}Running code simplifier...${c.reset}\n`);
+  console.log(`\n${c.cyan}Running ${hookName} hook...${c.reset}\n`);
 
-  const proc = Bun.spawn(["claude", "--permission-mode", "acceptEdits", CODE_SIMPLIFIER_PROMPT], {
+  const proc = Bun.spawn(["claude", "-p", prompt, "--permission-mode", "acceptEdits"], {
     stdio: ["inherit", "inherit", "inherit"],
   });
 
@@ -81,7 +85,6 @@ async function runNextFromQueue(debugMode: boolean = false): Promise<boolean> {
 
   console.log(`\n${c.cyan}Starting next queued feature:${c.reset} ${next}\n`);
 
-  const config = await readConfig();
   const dir = getFeatureDir(next);
   const tasksFilePath = `${dir}/tasks.json`;
   debug("runNextFromQueue", `Feature dir: ${dir}, tasks: ${tasksFilePath}`);
@@ -101,7 +104,7 @@ async function runNextFromQueue(debugMode: boolean = false): Promise<boolean> {
     await Bun.write(progressFile, "");
   }
 
-  const prompt = getFeaturePrompt(next, config.vcs);
+  const prompt = await getFeaturePrompt(next);
   debug("runNextFromQueue", `Starting runLoop for "${next}"`);
 
   await runLoop({
@@ -220,8 +223,8 @@ export async function runLoop(config: LoopConfig): Promise<void> {
         debug("runLoop", "Sending notification");
         await notify("Ralph Complete", `${label} complete after ${i} iterations`);
 
-        debug("runLoop", "Running code simplifier");
-        await runCodeSimplifier();
+        debug("runLoop", "Running on-complete hook");
+        await runHook("on-complete");
 
         debug("runLoop", "Running executor cleanup");
         await executor.cleanup();
@@ -249,6 +252,9 @@ export async function runLoop(config: LoopConfig): Promise<void> {
       }
 
       console.log(`\n✓ Iteration ${i} complete\n`);
+
+      // Run on-iteration hook to review work and potentially add follow-up tasks
+      await runHook("on-iteration");
     }
 
     console.log(`\n⚠️  Max iterations (${max}) reached`);

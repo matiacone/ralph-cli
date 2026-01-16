@@ -1,6 +1,5 @@
 import {
   checkRepoRoot,
-  readConfig,
   getFeatureDir,
   listFeatures,
   getFeaturePrompt,
@@ -48,7 +47,6 @@ export async function feature(args: string[]) {
 
   checkRepoRoot();
 
-  const config = await readConfig();
   const dir = getFeatureDir(name);
   const tasksFile = Bun.file(`${dir}/tasks.json`);
 
@@ -77,7 +75,7 @@ export async function feature(args: string[]) {
     await Bun.write(progressFile, "");
   }
 
-  const prompt = getFeaturePrompt(name, config.vcs);
+  const prompt = await getFeaturePrompt(name);
   const runnerConfig = {
     prompt,
     featureName: name,

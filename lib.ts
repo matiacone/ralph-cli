@@ -6,20 +6,17 @@ export interface RalphConfig {
   vcs: VcsType;
 }
 
-const VCS_INSTRUCTIONS = {
-  git: {
-    createBranch: `git checkout -b <branch-name> && git add -A && git commit -m "<message>"`,
-    submit: `git push -u origin HEAD && gh pr create --fill`,
-    modifyCommit: `git add -A && git commit -m "<message>"`,
-    updatePr: `git push`,
-  },
-  graphite: {
-    createBranch: `gt create <branch-name> --all -m "<message>"`,
-    submit: `gt submit --no-interactive`,
-    modifyCommit: `gt modify --all -c -m "<message>"`,
-    updatePr: `gt submit --no-interactive`,
-  },
-};
+function getPromptsDir(): string {
+  return ".ralph/prompts";
+}
+
+async function readPromptFile(path: string): Promise<string> {
+  const file = Bun.file(path);
+  if (!(await file.exists())) {
+    throw new Error(`Prompts not found. Run \`ralph setup\` first.`);
+  }
+  return file.text();
+}
 
 export function getConfigFile() {
   return ".ralph/config.json";
@@ -87,80 +84,23 @@ export async function listFeatures(): Promise<string[]> {
   }
 }
 
-export function getBacklogPrompt(vcs: VcsType = "git") {
-  const i = VCS_INSTRUCTIONS[vcs];
-  return `@.ralph/backlog.json @.ralph/progress.txt
-1. Find the highest-priority task to work on and work only on that task.
-   This should be the one YOU decide has the highest priority - not necessarily the first in the array.
-2. Check that the code is linted via bun run lint:fix, types check via bun run check-types, and tests pass via bun run test.
-3. ⚠️ MANDATORY VERIFICATION - DO NOT SKIP THIS STEP ⚠️
-   You MUST verify your changes actually work before marking the task complete. This is NOT optional.
-
-   For UI changes:
-   → Use the Playwright MCP to visually verify the changes render correctly
-   → Take a screenshot and confirm the UI looks correct
-
-   For backend changes (queries, mutations, actions, or any logic beyond trivial CRUD):
-   → Option A: Write 1-2 unit tests that exercise the new code paths
-   → Option B: Create a test function in convex/test.ts and run it: 'npx convex run test:<functionName>'
-
-   FAILURE TO VERIFY = TASK NOT COMPLETE. If you skip verification, you are lying about the task being done.
-
-4. Update the backlog.json with the work that was done (set passes: true when complete).
-   Include in your progress entry WHAT verification you performed (e.g., "Verified: Playwright screenshot" or "Verified: unit test added" or "Verified: ran test:myFunction").
-5. Append a concise progress entry to progress.txt:
-   Format: [TIMESTAMP] Task: <title> | Branch: <branch> | Verified: <what verification was done> | <1-2 sentence summary> | Gotchas: <any important learnings, or "none">
-6. Make a git commit and submit PR:
-   - Check the current branch with 'git branch --show-current'
-   - If you are NOT on the task's branch:
-     * Use '${i.createBranch}' to create a new branch
-     * Then use '${i.submit}' to push and create a PR
-   - If you are already on the task's branch:
-     * Use '${i.modifyCommit}' to add a new commit
-     * Then use '${i.updatePr}' to push and update the PR
-ONLY WORK ON A SINGLE TASK.
-If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>STUCK</promise> with a brief summary of what you tried and what is blocking progress.`;
+export async function getBacklogPrompt(): Promise<string> {
+  const promptPath = `${getPromptsDir()}/backlog.md`;
+  const instructions = await readPromptFile(promptPath);
+  return `@.ralph/backlog.json @.ralph/progress.txt\n${instructions}`;
 }
 
-export function getFeaturePrompt(name: string, vcs: VcsType = "git") {
+export async function getFeaturePrompt(name: string): Promise<string> {
   const dir = getFeatureDir(name);
-  const i = VCS_INSTRUCTIONS[vcs];
-  return `@${dir}/plan.md @${dir}/tasks.json @${dir}/progress.txt
-1. FIRST: Read the Branch field at the top of plan.md. You MUST use this branch for all commits.
-2. Review plan.md for context, then find the highest-priority incomplete task in tasks.json.
-   This should be the one YOU decide has the highest priority - not necessarily the first in the array.
-3. Implement the task, ensuring code is linted (bun run lint:fix), types check (bun run check-types), and tests pass (bun run test).
-4. ⚠️ MANDATORY VERIFICATION - DO NOT SKIP THIS STEP ⚠️
-   You MUST verify your changes actually work before marking the task complete. This is NOT optional.
-
-   For UI changes:
-   → Use the Playwright MCP to visually verify the changes render correctly
-   → Take a screenshot and confirm the UI looks correct
-
-   For backend changes (queries, mutations, actions, or any logic beyond trivial CRUD):
-   → Option A: Write 1-2 unit tests that exercise the new code paths
-   → Option B: Create a test function in convex/test.ts and run it: 'npx convex run test:<functionName>'
-
-   FAILURE TO VERIFY = TASK NOT COMPLETE. If you skip verification, you are lying about the task being done.
-
-5. Mark the task complete in tasks.json by setting "passes": true.
-   Include in your progress entry WHAT verification you performed (e.g., "Verified: Playwright screenshot" or "Verified: unit test added" or "Verified: ran test:myFunction").
-6. Append a concise progress entry to ${dir}/progress.txt:
-   Format: [TIMESTAMP] Task: <title> | Verified: <what verification was done> | <1-2 sentence summary> | Gotchas: <any important learnings, or "none">
-7. Make a git commit using the branch from plan.md:
-   - Check the current branch with 'git branch --show-current'
-   - If you are NOT on the branch specified in plan.md:
-     * Use '${i.createBranch}' to create the branch with the exact name from plan.md
-     * Then use '${i.submit}' to push and create a PR
-   - If you are already on the correct branch:
-     * Use '${i.modifyCommit}' to add a new commit
-     * Then use '${i.updatePr}' to push and update the PR
-ONLY WORK ON A SINGLE TASK.
-If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>STUCK</promise> with a brief summary of what you tried and what is blocking progress.`;
+  const promptPath = `${getPromptsDir()}/feature.md`;
+  const instructions = await readPromptFile(promptPath);
+  return `@${dir}/plan.md @${dir}/tasks.json @${dir}/progress.txt\n${instructions}`;
 }
 
 export async function getReportPrompt(name: string): Promise<string> {
   const dir = getFeatureDir(name);
+  const promptPath = `${getPromptsDir()}/report.md`;
+  const instructions = await readPromptFile(promptPath);
 
   let gitLog = "";
   let gitDiff = "";
@@ -218,16 +158,16 @@ ${gitDiff}
 
 You are reviewing the progress of the "${name}" feature.
 ${taskSummary}${gitSection}${diffSection}
-Provide a critical analysis:
-- What has been accomplished so far
-- What tasks remain and their priority
-- Code smells, anti-patterns, or questionable design decisions you notice
-- Overly complex solutions where simpler alternatives exist
-- Missing error handling, edge cases, or potential bugs
-- Inconsistencies with project conventions or best practices
-- Concrete recommendations for improvement
+${instructions}`;
+}
 
-Be direct and honest. Don't sugarcoat issues - the goal is to catch problems early. Point out specific files and line numbers when identifying issues. The user may ask follow-up questions about the feature, code, or implementation approach.`;
+export async function getHookPrompt(hook: string): Promise<string | null> {
+  const hookPath = `${getPromptsDir()}/hooks/${hook}.md`;
+  const file = Bun.file(hookPath);
+  if (!(await file.exists())) {
+    return null;
+  }
+  return file.text();
 }
 
 export interface TaskFile {

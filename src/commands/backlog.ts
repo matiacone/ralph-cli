@@ -1,6 +1,5 @@
 import {
   checkRepoRoot,
-  readConfig,
   readBacklog,
   readState,
   getBacklogPrompt,
@@ -48,8 +47,7 @@ export async function backlog(args: string[]) {
 
   checkRepoRoot();
 
-  const config = await readConfig();
-  const backlogPrompt = getBacklogPrompt(config.vcs);
+  const backlogPrompt = await getBacklogPrompt();
 
   const backlogData = await readBacklog();
   if (!backlogData) {
