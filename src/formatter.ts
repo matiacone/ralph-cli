@@ -19,6 +19,58 @@ export class StreamFormatter {
     return this.assistantText;
   }
 
+  private formatToolInput(toolName: string, input: Record<string, unknown>): string {
+    if (!input) return "";
+
+    switch (toolName) {
+      case "Read":
+      case "Write":
+      case "Edit":
+      case "NotebookEdit":
+        if (input.file_path || input.notebook_path) {
+          const path = (input.file_path || input.notebook_path) as string;
+          return ` ${c.dim}${path}${c.reset}`;
+        }
+        break;
+      case "Bash":
+        if (input.description) {
+          return ` ${c.dim}${input.description}${c.reset}`;
+        } else if (input.command) {
+          const cmd = input.command as string;
+          const truncated = cmd.length > 60 ? cmd.slice(0, 57) + "..." : cmd;
+          return ` ${c.dim}${truncated}${c.reset}`;
+        }
+        break;
+      case "Grep":
+        if (input.pattern) {
+          const path = input.path ? ` in ${input.path}` : "";
+          return ` ${c.dim}/${input.pattern}/${path}${c.reset}`;
+        }
+        break;
+      case "Glob":
+        if (input.pattern) {
+          return ` ${c.dim}${input.pattern}${c.reset}`;
+        }
+        break;
+      case "Task":
+        if (input.description) {
+          return ` ${c.dim}${input.description}${c.reset}`;
+        }
+        break;
+      case "WebFetch":
+        if (input.url) {
+          return ` ${c.dim}${input.url}${c.reset}`;
+        }
+        break;
+      case "WebSearch":
+        if (input.query) {
+          return ` ${c.dim}"${input.query}"${c.reset}`;
+        }
+        break;
+    }
+    return "";
+  }
+
   private formatLine(line: string): string {
     // Code block start
     if (line.startsWith("```")) {
@@ -92,20 +144,18 @@ export class StreamFormatter {
       try {
         const event = JSON.parse(line);
 
-        // Handle assistant text content
+        // Handle assistant text content and tool use
         if (event.type === "assistant" && event.message?.content) {
           for (const block of event.message.content) {
             if (block.type === "text") {
               this.assistantText += block.text;
               output += this.formatText(block.text);
+            } else if (block.type === "tool_use") {
+              const toolName = block.name;
+              const toolInput = this.formatToolInput(toolName, block.input);
+              output += `\n${c.dim}─── ${c.yellow}${toolName}${c.reset}${toolInput}${c.dim} ───${c.reset}\n`;
             }
           }
-        }
-
-        // Handle tool use - show what tool is being called
-        if (event.type === "content_block_start" && event.content_block?.type === "tool_use") {
-          const toolName = event.content_block.name;
-          output += `\n${c.dim}─── ${c.yellow}${toolName}${c.dim} ───${c.reset}\n`;
         }
 
         // Handle tool results

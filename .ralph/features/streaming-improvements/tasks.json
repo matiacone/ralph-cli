@@ -10,7 +10,7 @@
         "Glob tool shows the pattern",
         "Run ralph and confirm tool inputs are visible"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Show abbreviated tool results",
