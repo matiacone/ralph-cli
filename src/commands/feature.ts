@@ -6,7 +6,10 @@ import {
   getFeaturePrompt,
   getGitRemoteUrl,
   getCurrentBranch,
+  isRalphRunning,
+  addToQueue,
 } from "../../lib";
+import { c } from "../colors";
 import { runSingleIteration, runLoop } from "../runner";
 import { createExecutor } from "../executors";
 
@@ -58,6 +61,14 @@ export async function feature(args: string[]) {
       console.error(`\nCreate it with: /create-ralph-plan ${name}`);
     }
     process.exit(1);
+  }
+
+  // Check if Ralph is already running - if so, queue this feature instead
+  if (await isRalphRunning()) {
+    await addToQueue(name);
+    console.log(`${c.cyan}Queued feature:${c.reset} ${name}`);
+    console.log(`${c.dim}Will run automatically when current feature completes${c.reset}`);
+    process.exit(0);
   }
 
   const progressFile = Bun.file(`${dir}/progress.txt`);

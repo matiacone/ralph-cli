@@ -352,4 +352,50 @@ describe("file operations", () => {
       expect(result).toBe(false);
     });
   });
+
+  describe("queue-when-busy workflow", () => {
+    test("simulates feature command queueing when Ralph is running", async () => {
+      // Set up a feature
+      await Bun.$`mkdir -p .ralph/features/test-feature`.quiet();
+      await Bun.write(".ralph/features/test-feature/tasks.json", JSON.stringify({ tasks: [] }));
+
+      // Set Ralph as running
+      await Bun.write(".ralph/state.json", JSON.stringify({ status: "running", feature: "other-feature" }));
+
+      // Verify Ralph is running
+      const running = await isRalphRunning();
+      expect(running).toBe(true);
+
+      // Queue the feature (simulating what feature command does)
+      await addToQueue("test-feature");
+
+      // Verify it was queued
+      const queue = await readQueue();
+      expect(queue).toEqual(["test-feature"]);
+    });
+
+    test("simulates multiple features being queued in order", async () => {
+      // Set Ralph as running
+      await Bun.write(".ralph/state.json", JSON.stringify({ status: "running" }));
+
+      // Queue multiple features
+      await addToQueue("feature-a");
+      await addToQueue("feature-b");
+      await addToQueue("feature-c");
+
+      // Verify queue order
+      const queue = await readQueue();
+      expect(queue).toEqual(["feature-a", "feature-b", "feature-c"]);
+    });
+
+    test("simulates feature not being queued when Ralph is not running", async () => {
+      // Ralph is not running (no state file)
+      const running = await isRalphRunning();
+      expect(running).toBe(false);
+
+      // Queue should be empty (feature would proceed to run instead of queueing)
+      const queue = await readQueue();
+      expect(queue).toEqual([]);
+    });
+  });
 });

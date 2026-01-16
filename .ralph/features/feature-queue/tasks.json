@@ -19,7 +19,7 @@
         "User sees a message like 'Queued feature: X'",
         "If nothing is running, feature executes immediately as before"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "title": "Process queue after feature completion",
