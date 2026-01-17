@@ -63,7 +63,7 @@ Use `createExecutor(sandbox: boolean)` factory from `src/executors/index.ts`.
 All state lives in `.ralph/`:
 - `state.json` - Iteration count, status, current feature
 - `backlog.json` - Task list
-- `config.json` - VCS type (git or graphite)
+- `config.json` - Model configuration
 - `progress.txt` - Append-only log
 
 ### Output Formatting
@@ -115,6 +115,7 @@ describe("feature", () => {
 | `ralph setup` | Initialize Ralph in a project |
 | `ralph backlog` | Run backlog tasks |
 | `ralph feature <name>` | Run a feature plan |
+| `ralph oneshot <name>` | Run feature in single session |
 | `ralph watch` | Auto-run on task changes |
 | `ralph list` | Show tasks and status |
 | `ralph report <name>` | Interactive feature review |

@@ -1,19 +1,39 @@
 import {
   checkRepoRoot,
+  checkCleanWorkingTree,
   getFeatureDir,
   listFeatures,
+  getMostRecentFeature,
   getFeaturePrompt,
   getGitRemoteUrl,
   getCurrentBranch,
   isRalphRunning,
   addToQueue,
+  readConfig,
 } from "../../lib";
 import { c } from "../colors";
 import { runSingleIteration, runLoop } from "../runner";
 import { createExecutor } from "../executors";
 
 export async function feature(args: string[]) {
-  const name = args.find((a) => !a.startsWith("-"));
+  const first = args.includes("--first");
+  const once = args.includes("--once");
+  const sandbox = args.includes("--sandbox");
+  const debugMode = args.includes("--debug");
+  const force = args.includes("--force");
+
+  let name = args.find((a) => !a.startsWith("-"));
+
+  if (first) {
+    const recentFeature = await getMostRecentFeature();
+    if (!recentFeature) {
+      console.error("❌ No features found. Create one with: /create-ralph-plan <name>");
+      process.exit(1);
+    }
+    name = recentFeature;
+    console.log(`${c.cyan}Using most recent feature:${c.reset} ${name}`);
+  }
+
   if (!name) {
     const features = await listFeatures();
     if (features.length > 0) {
@@ -25,9 +45,6 @@ export async function feature(args: string[]) {
     }
     process.exit(1);
   }
-  const once = args.includes("--once");
-  const sandbox = args.includes("--sandbox");
-  const debugMode = args.includes("--debug");
 
   if (sandbox && once) {
     console.error("❌ --sandbox and --once cannot be used together");
@@ -46,6 +63,10 @@ export async function feature(args: string[]) {
   }
 
   checkRepoRoot();
+
+  if (!force) {
+    await checkCleanWorkingTree();
+  }
 
   const dir = getFeatureDir(name);
   const tasksFile = Bun.file(`${dir}/tasks.json`);
@@ -88,6 +109,9 @@ export async function feature(args: string[]) {
     return;
   }
 
+  const config = await readConfig();
+  const model = config.models?.feature;
+
   let executor;
   if (sandbox) {
     const repoUrl = await getGitRemoteUrl();
@@ -95,5 +119,11 @@ export async function feature(args: string[]) {
     executor = await createExecutor({ sandbox: true, repoUrl, branch });
   }
 
-  await runLoop({ ...runnerConfig, executor, debug: debugMode });
+  await runLoop({
+    ...runnerConfig,
+    executor,
+    debug: debugMode,
+    model,
+    modelConfig: config.models,
+  });
 }

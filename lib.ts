@@ -1,9 +1,34 @@
 const NTFY_URL = process.env.NTFY_URL;
 
-export type VcsType = "git" | "graphite";
+export type ModelAlias = "sonnet" | "opus" | "haiku" | "opusplan";
+
+export interface ModelConfig {
+  backlog?: ModelAlias;
+  feature?: ModelAlias;
+  onIteration?: ModelAlias;
+  onComplete?: ModelAlias;
+  report?: ModelAlias;
+}
+
+export interface ServiceConfig {
+  name: string;
+  command: string;
+  args?: string[];
+  readyPattern?: string;
+  readyTimeout?: number;
+  openUrl?: string;
+}
+
+export interface McpConfig {
+  playwriter?: {
+    enabled: boolean;
+  };
+}
 
 export interface RalphConfig {
-  vcs: VcsType;
+  models?: ModelConfig;
+  services?: ServiceConfig[];
+  mcp?: McpConfig;
 }
 
 function getPromptsDir(): string {
@@ -25,7 +50,7 @@ export function getConfigFile() {
 export async function readConfig(): Promise<RalphConfig> {
   const file = Bun.file(getConfigFile());
   if (!(await file.exists())) {
-    return { vcs: "git" };
+    return {};
   }
   return file.json();
 }
@@ -84,6 +109,20 @@ export async function listFeatures(): Promise<string[]> {
   }
 }
 
+export async function getMostRecentFeature(): Promise<string | null> {
+  const features = await listFeatures();
+  if (features.length === 0) return null;
+
+  let mostRecent: { name: string; mtimeMs: number } | null = null;
+  for (const name of features) {
+    const stat = await Bun.file(`${getFeatureDir(name)}/tasks.json`).stat();
+    if (!mostRecent || stat.mtimeMs > mostRecent.mtimeMs) {
+      mostRecent = { name, mtimeMs: stat.mtimeMs };
+    }
+  }
+  return mostRecent?.name ?? null;
+}
+
 export async function getBacklogPrompt(): Promise<string> {
   const promptPath = `${getPromptsDir()}/backlog.md`;
   const instructions = await readPromptFile(promptPath);
@@ -93,6 +132,13 @@ export async function getBacklogPrompt(): Promise<string> {
 export async function getFeaturePrompt(name: string): Promise<string> {
   const dir = getFeatureDir(name);
   const promptPath = `${getPromptsDir()}/feature.md`;
+  const instructions = await readPromptFile(promptPath);
+  return `@${dir}/plan.md @${dir}/tasks.json @${dir}/progress.txt\n${instructions}`;
+}
+
+export async function getOneshotPrompt(name: string): Promise<string> {
+  const dir = getFeatureDir(name);
+  const promptPath = `${getPromptsDir()}/oneshot.md`;
   const instructions = await readPromptFile(promptPath);
   return `@${dir}/plan.md @${dir}/tasks.json @${dir}/progress.txt\n${instructions}`;
 }
@@ -161,13 +207,20 @@ ${taskSummary}${gitSection}${diffSection}
 ${instructions}`;
 }
 
-export async function getHookPrompt(hook: string): Promise<string | null> {
+export async function getHookPrompt(hook: string, featureName?: string): Promise<string | null> {
   const hookPath = `${getPromptsDir()}/hooks/${hook}.md`;
   const file = Bun.file(hookPath);
   if (!(await file.exists())) {
     return null;
   }
-  return file.text();
+  const instructions = await file.text();
+
+  if (featureName) {
+    const dir = getFeatureDir(featureName);
+    return `@${dir}/plan.md @${dir}/tasks.json @${dir}/progress.txt\n${instructions}`;
+  }
+
+  return instructions;
 }
 
 export interface TaskFile {
@@ -246,6 +299,27 @@ export async function getCurrentBranch(): Promise<string> {
     throw new Error(
       `Failed to get current git branch: ${error instanceof Error ? error.message : "Unknown error"}. Make sure you're in a git repository.`
     );
+  }
+}
+
+export async function hasUncommittedChanges(): Promise<boolean> {
+  try {
+    const result = await Bun.$`git status --porcelain`.quiet();
+    return result.text().trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function checkCleanWorkingTree(): Promise<void> {
+  if (await hasUncommittedChanges()) {
+    console.error("❌ Error: You have uncommitted changes in your working directory.");
+    console.error("   Ralph modifies files and creates commits, which can conflict with your work.");
+    console.error("");
+    console.error("   Options:");
+    console.error("   1. Commit or stash your changes first");
+    console.error("   2. Use --force to run anyway (not recommended)");
+    process.exit(1);
   }
 }
 

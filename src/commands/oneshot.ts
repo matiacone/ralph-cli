@@ -1,15 +1,16 @@
 import {
   checkRepoRoot,
+  getFeatureDir,
   listFeatures,
   getMostRecentFeature,
-  getFeatureDir,
-  getReportPrompt,
-  readConfig,
+  getOneshotPrompt,
 } from "../../lib";
 import { c } from "../colors";
+import { runSingleIteration } from "../runner";
 
-export async function report(args: string[]) {
+export async function oneshot(args: string[]) {
   const first = args.includes("--first");
+  const debugMode = args.includes("--debug");
 
   let name = args.find((a) => !a.startsWith("-"));
 
@@ -26,10 +27,10 @@ export async function report(args: string[]) {
   if (!name) {
     const features = await listFeatures();
     if (features.length > 0) {
-      console.error("Usage: ralph report <name>");
+      console.error("Usage: ralph oneshot <name>");
       console.error(`\nAvailable features: ${features.join(", ")}`);
     } else {
-      console.error("Usage: ralph report <name>");
+      console.error("Usage: ralph oneshot <name>");
       console.error("\nNo features found. Create one with: /create-ralph-plan <name>");
     }
     process.exit(1);
@@ -43,30 +44,25 @@ export async function report(args: string[]) {
   if (!(await tasksFile.exists())) {
     const features = await listFeatures();
     if (features.length > 0) {
-      console.error(`Feature '${name}' not found.`);
+      console.error(`❌ Feature '${name}' not found.`);
       console.error(`\nAvailable features: ${features.join(", ")}`);
     } else {
-      console.error(`Feature '${name}' not found.`);
+      console.error(`❌ Feature '${name}' not found.`);
       console.error(`\nCreate it with: /create-ralph-plan ${name}`);
     }
     process.exit(1);
   }
 
-  console.log(`${c.cyan}Starting interactive review of: ${name}${c.reset}\n`);
-
-  const prompt = await getReportPrompt(name);
-  const config = await readConfig();
-  const model = config.models?.report;
-
-  const args_cmd = ["claude"];
-  if (model) {
-    args_cmd.push("--model", model);
+  const progressFile = Bun.file(`${dir}/progress.txt`);
+  if (!(await progressFile.exists())) {
+    await Bun.write(progressFile, "");
   }
-  args_cmd.push(prompt);
 
-  const proc = Bun.spawn(args_cmd, {
-    stdio: ["inherit", "inherit", "inherit"],
+  const prompt = await getOneshotPrompt(name);
+  await runSingleIteration({
+    prompt,
+    featureName: name,
+    tasksFilePath: `${dir}/tasks.json`,
+    label: `Oneshot: ${name}`,
   });
-
-  await proc.exited;
 }

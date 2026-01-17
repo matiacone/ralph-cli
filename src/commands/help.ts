@@ -10,6 +10,9 @@ Commands:
   feature <name>     Run a feature plan from .ralph/features/<name>/
                      --once                Run single iteration only
 
+  oneshot <name>     Run a feature plan in a single session
+                     Completes all tasks at once instead of iterating
+
   backlog            Run backlog tasks from .ralph/backlog.json
                      --once                Run single iteration only
                      --max-iterations <n>  Override max iterations

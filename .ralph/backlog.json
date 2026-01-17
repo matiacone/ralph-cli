@@ -8,6 +8,19 @@
       ],
       "branch": "feature/example",
       "passes": false
+    },
+    {
+      "title": "Remove keyboard shortcuts from company detail view",
+      "description": "The company-detail-view.tsx has keyboard shortcuts (j/k for navigation, Escape to go back) implemented via a useEffect with keydown listener. These shortcuts should be removed to simplify the component and remove the keyboard navigation feature.",
+      "acceptance": [
+        "The useEffect that adds the keydown event listener is removed from company-detail-view.tsx",
+        "The flashButton helper function is removed",
+        "The button refs (backButtonRef, prevButtonRef, nextButtonRef) are removed since they're only used for the keyboard shortcut visual feedback",
+        "Navigation still works via clicking the buttons",
+        "bun run check-types passes at the root level"
+      ],
+      "branch": "ralph/remove-company-detail-shortcuts",
+      "passes": false
     }
   ]
 }

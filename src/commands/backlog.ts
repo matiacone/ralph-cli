@@ -1,10 +1,12 @@
 import {
   checkRepoRoot,
+  checkCleanWorkingTree,
   readBacklog,
   readState,
   getBacklogPrompt,
   getGitRemoteUrl,
   getCurrentBranch,
+  readConfig,
 } from "../../lib";
 import { runSingleIteration, runLoop } from "../runner";
 import { createExecutor } from "../executors";
@@ -14,6 +16,7 @@ export async function backlog(args: string[]) {
   let resume = false;
   let once = false;
   let sandbox = false;
+  let force = false;
 
   for (let i = 0; i < args.length; i++) {
     const nextArg = args[i + 1];
@@ -26,6 +29,8 @@ export async function backlog(args: string[]) {
       once = true;
     } else if (args[i] === "--sandbox") {
       sandbox = true;
+    } else if (args[i] === "--force") {
+      force = true;
     }
   }
 
@@ -46,6 +51,10 @@ export async function backlog(args: string[]) {
   }
 
   checkRepoRoot();
+
+  if (!force) {
+    await checkCleanWorkingTree();
+  }
 
   const backlogPrompt = await getBacklogPrompt();
 
@@ -75,6 +84,9 @@ export async function backlog(args: string[]) {
   const state = await readState();
   const startIteration = resume && state ? state.iteration : 0;
 
+  const config = await readConfig();
+  const model = config.models?.backlog;
+
   let executor;
   if (sandbox) {
     const repoUrl = await getGitRemoteUrl();
@@ -87,5 +99,7 @@ export async function backlog(args: string[]) {
     maxIterations,
     startIteration,
     executor,
+    model,
+    modelConfig: config.models,
   });
 }

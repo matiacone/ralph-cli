@@ -36,3 +36,5 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Ralph runtime state
 .ralph/state.json
 .ralph/queue.json
+.ralph/logs/
+.ralph/mcp-config.json

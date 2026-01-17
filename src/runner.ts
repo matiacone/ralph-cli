@@ -11,14 +11,17 @@ import {
   getFeaturePrompt,
   getHookPrompt,
   setQueueDebugger,
+  readConfig,
   type TaskFile,
+  type ModelAlias,
+  type ModelConfig,
 } from "../lib";
 import type { Executor } from "./executor";
 import { LocalExecutor } from "./executors/local";
 import { debug, setDebug } from "./debug";
 
-async function runHook(hookName: string): Promise<void> {
-  const prompt = await getHookPrompt(hookName);
+async function runHook(hookName: string, featureName?: string, model?: ModelAlias): Promise<void> {
+  const prompt = await getHookPrompt(hookName, featureName);
   if (!prompt) {
     debug("runHook", `Hook "${hookName}" not found, skipping`);
     return;
@@ -26,9 +29,54 @@ async function runHook(hookName: string): Promise<void> {
 
   console.log(`\n${c.cyan}Running ${hookName} hook...${c.reset}\n`);
 
-  const proc = Bun.spawn(["claude", "-p", prompt, "--permission-mode", "acceptEdits"], {
-    stdio: ["inherit", "inherit", "inherit"],
+  const args = [
+    "claude",
+    "--permission-mode",
+    "acceptEdits",
+    "-p",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+  ];
+
+  if (model) {
+    args.push("--model", model);
+  }
+
+  args.push(prompt);
+
+  const proc = Bun.spawn(args, {
+    stdio: ["inherit", "pipe", "pipe"],
   });
+
+  const formatter = new StreamFormatter();
+  const decoder = new TextDecoder();
+
+  const readStream = async (
+    stream: ReadableStream<Uint8Array>,
+    handler: (chunk: string) => void
+  ) => {
+    const reader = stream.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const text = decoder.decode(value);
+      handler(text);
+    }
+  };
+
+  await Promise.all([
+    readStream(proc.stdout, (chunk) => {
+      const { output } = formatter.parse(chunk);
+      if (output) process.stdout.write(output);
+    }),
+    readStream(proc.stderr, (chunk) => {
+      process.stderr.write(chunk);
+    }),
+  ]);
+
+  const remaining = formatter.flush();
+  if (remaining) process.stdout.write(remaining);
 
   await proc.exited;
 }
@@ -39,6 +87,7 @@ export interface RunnerConfig {
   tasksFilePath: string;
   label: string;
   executor?: Executor;
+  model?: ModelAlias;
 }
 
 export interface IterationResult {
@@ -66,9 +115,10 @@ export interface LoopConfig extends RunnerConfig {
   maxIterations?: number;
   startIteration?: number;
   debug?: boolean;
+  modelConfig?: ModelConfig;
 }
 
-async function runNextFromQueue(debugMode: boolean = false): Promise<boolean> {
+async function runNextFromQueue(debugMode: boolean = false, modelConfig?: ModelConfig): Promise<boolean> {
   debug("runNextFromQueue", "Starting queue check");
 
   // Log queue state before popping
@@ -96,7 +146,7 @@ async function runNextFromQueue(debugMode: boolean = false): Promise<boolean> {
   if (!exists) {
     console.error(`${c.yellow}Queued feature '${next}' not found, skipping${c.reset}`);
     debug("runNextFromQueue", "Feature not found, recursing to next");
-    return runNextFromQueue(debugMode);
+    return runNextFromQueue(debugMode, modelConfig);
   }
 
   const progressFile = Bun.file(`${dir}/progress.txt`);
@@ -113,6 +163,8 @@ async function runNextFromQueue(debugMode: boolean = false): Promise<boolean> {
     tasksFilePath,
     label: `Feature: ${next}`,
     debug: debugMode,
+    model: modelConfig?.feature,
+    modelConfig,
   });
 
   debug("runNextFromQueue", `runLoop completed for "${next}"`);
@@ -138,6 +190,11 @@ export async function runLoop(config: LoopConfig): Promise<void> {
     process.exit(1);
   }
 
+  // Load model config from config.json if not provided
+  const ralphConfig = await readConfig();
+  const modelConfig = config.modelConfig ?? ralphConfig.models;
+  const iterationModel = config.model;
+
   const max = maxIterations ?? state.maxIterations;
   const current = startIteration ?? 0;
 
@@ -147,6 +204,9 @@ export async function runLoop(config: LoopConfig): Promise<void> {
 
   console.log(`Tasks: ${tasksFilePath}`);
   console.log(`Max iterations: ${max}`);
+  if (iterationModel) {
+    console.log(`Model: ${iterationModel}`);
+  }
   console.log(`Starting from: ${current + 1}\n`);
   console.log("Press Ctrl+C to cancel\n");
 
@@ -156,6 +216,8 @@ export async function runLoop(config: LoopConfig): Promise<void> {
   await executor.initialize();
 
   const cleanup = async () => {
+    console.log(`\n${c.yellow}Cancelling...${c.reset}`);
+    await writeState({ ...state, status: "cancelled", feature: featureName });
     await executor.cleanup();
     process.exit(130);
   };
@@ -178,7 +240,8 @@ export async function runLoop(config: LoopConfig): Promise<void> {
         },
         (chunk) => {
           process.stderr.write(chunk);
-        }
+        },
+        { model: iterationModel }
       );
 
       const remaining = formatter.flush();
@@ -224,14 +287,14 @@ export async function runLoop(config: LoopConfig): Promise<void> {
         await notify("Ralph Complete", `${label} complete after ${i} iterations`);
 
         debug("runLoop", "Running on-complete hook");
-        await runHook("on-complete");
+        await runHook("on-complete", featureName, modelConfig?.onComplete);
 
         debug("runLoop", "Running executor cleanup");
         await executor.cleanup();
 
         // Check queue for next feature
         debug("runLoop", "About to check queue for next feature");
-        const ranNext = await runNextFromQueue(config.debug);
+        const ranNext = await runNextFromQueue(config.debug, modelConfig);
         debug("runLoop", `runNextFromQueue returned: ${ranNext}`);
 
         if (ranNext) {
@@ -254,7 +317,7 @@ export async function runLoop(config: LoopConfig): Promise<void> {
       console.log(`\n✓ Iteration ${i} complete\n`);
 
       // Run on-iteration hook to review work and potentially add follow-up tasks
-      await runHook("on-iteration");
+      await runHook("on-iteration", featureName, modelConfig?.onIteration);
     }
 
     console.log(`\n⚠️  Max iterations (${max}) reached`);

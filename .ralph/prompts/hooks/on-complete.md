@@ -1,0 +1,1 @@
+Use the Task tool to spawn the code-simplifier agent to analyze recently modified code. After it completes, review its recommendations and add any worthwhile improvements to .ralph/backlog.json as new tasks. Mark new tasks with "passes": false.

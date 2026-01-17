@@ -6,12 +6,14 @@ await autoUpdate();
 
 import { setup } from "./src/commands/setup";
 import { feature } from "./src/commands/feature";
+import { oneshot } from "./src/commands/oneshot";
 import { backlog } from "./src/commands/backlog";
 import { watchMode } from "./src/commands/watch";
 import { status } from "./src/commands/status";
 import { list } from "./src/commands/list";
 import { cancel } from "./src/commands/cancel";
 import { report } from "./src/commands/report";
+import { deleteFeature } from "./src/commands/delete";
 import { queue } from "./src/commands/queue";
 import { testQueue } from "./src/commands/test-queue";
 import { help } from "./src/commands/help";
@@ -25,6 +27,9 @@ switch (command) {
     break;
   case "feature":
     await feature(args);
+    break;
+  case "oneshot":
+    await oneshot(args);
     break;
   case "backlog":
     await backlog(args);
@@ -43,6 +48,9 @@ switch (command) {
     break;
   case "report":
     await report(args);
+    break;
+  case "delete":
+    await deleteFeature(args);
     break;
   case "queue":
     await queue();

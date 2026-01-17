@@ -1,5 +1,5 @@
 import { Daytona, Sandbox, PtyHandle } from "@daytonaio/sdk";
-import type { Executor, ExecutionResult } from "../executor";
+import type { Executor, ExecutionResult, ExecuteOptions } from "../executor";
 
 export interface DaytonaExecutorConfig {
   repoUrl: string;
@@ -72,7 +72,8 @@ export class DaytonaExecutor implements Executor {
   async execute(
     prompt: string,
     onStdout: (chunk: string) => void,
-    _onStderr: (chunk: string) => void
+    _onStderr: (chunk: string) => void,
+    options?: ExecuteOptions
   ): Promise<ExecutionResult> {
     if (!this.sandbox) {
       throw new Error("Executor not initialized. Call initialize() first.");
@@ -82,8 +83,9 @@ export class DaytonaExecutor implements Executor {
     const ghToken = process.env.GH_TOKEN!;
 
     const escapedPrompt = prompt.replace(/'/g, "'\\''");
+    const modelFlag = options?.model ? ` --model ${options.model}` : "";
     // Use npx to run claude (avoids PATH issues with npm global installs)
-    const claudeCmd = `npx @anthropic-ai/claude-code --dangerously-skip-permissions -p --output-format stream-json --verbose '${escapedPrompt}'`;
+    const claudeCmd = `npx @anthropic-ai/claude-code --dangerously-skip-permissions -p --output-format stream-json --verbose${modelFlag} '${escapedPrompt}'`;
 
     let output = "";
     const decoder = new TextDecoder();

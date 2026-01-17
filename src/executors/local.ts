@@ -1,14 +1,23 @@
-import type { Executor, ExecutionResult } from "../executor";
+import type { Executor, ExecutionResult, ExecuteOptions } from "../executor";
+import { readConfig } from "../../lib";
+import { ServiceManager } from "../services";
 
 export class LocalExecutor implements Executor {
+  private serviceManager: ServiceManager | null = null;
+
   async initialize(): Promise<void> {
-    // No initialization needed for local execution
+    const config = await readConfig();
+    if (config.services?.length) {
+      this.serviceManager = new ServiceManager(config.services, config.mcp);
+      await this.serviceManager.startAll();
+    }
   }
 
   async execute(
     prompt: string,
     onStdout: (chunk: string) => void,
-    onStderr: (chunk: string) => void
+    onStderr: (chunk: string) => void,
+    options?: ExecuteOptions
   ): Promise<ExecutionResult> {
     const args = [
       "claude",
@@ -17,8 +26,18 @@ export class LocalExecutor implements Executor {
       "--output-format",
       "stream-json",
       "--verbose",
-      prompt,
     ];
+
+    if (options?.model) {
+      args.push("--model", options.model);
+    }
+
+    const mcpConfigPath = this.serviceManager?.getMcpConfigPath();
+    if (mcpConfigPath) {
+      args.push("--mcp-config", mcpConfigPath);
+    }
+
+    args.push(prompt);
 
     const proc = Bun.spawn(args, {
       stdio: ["inherit", "pipe", "pipe"],
@@ -61,6 +80,8 @@ export class LocalExecutor implements Executor {
   }
 
   async cleanup(): Promise<void> {
-    // No cleanup needed for local execution
+    if (this.serviceManager) {
+      await this.serviceManager.stopAll();
+    }
   }
 }

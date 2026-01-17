@@ -85,12 +85,32 @@ const DEFAULT_ON_ITERATION_PROMPT = `Review the changes made in the last iterati
 
 const DEFAULT_ON_COMPLETE_PROMPT = `Use the Task tool to spawn the code-simplifier agent to analyze recently modified code. After it completes, review its recommendations and add any worthwhile improvements to .ralph/backlog.json as new tasks. Mark new tasks with "passes": false.`;
 
+const DEFAULT_ONESHOT_PROMPT = `You are completing a feature in a SINGLE session. Complete ALL tasks in tasks.json before ending.
+
+IMPORTANT: This is a oneshot run - there are no follow-up iterations. You must finish everything now.
+
+1. FIRST: Read the Branch field at the top of plan.md. Use this branch for all commits.
+2. Review plan.md for full context on the feature.
+3. Work through ALL incomplete tasks in tasks.json, one by one.
+4. For each task:
+   - Implement the changes
+   - Run lint (bun run lint:fix), type check (bun run check-types), and tests (bun run test)
+   - Mark it complete in tasks.json by setting "passes": true
+5. After ALL tasks are complete:
+   - Append a summary to progress.txt with what was accomplished
+   - Commit all changes to the branch specified in plan.md
+   - Push and create/update the PR
+
+If you encounter blockers on a task, note them in progress.txt and continue to the next task.
+Do NOT stop until all tasks are either completed or documented as blocked.`;
+
 async function createPromptFiles() {
   await $`mkdir -p .ralph/prompts/hooks`.quiet();
 
   const prompts = [
     { path: ".ralph/prompts/backlog.md", content: DEFAULT_BACKLOG_PROMPT },
     { path: ".ralph/prompts/feature.md", content: DEFAULT_FEATURE_PROMPT },
+    { path: ".ralph/prompts/oneshot.md", content: DEFAULT_ONESHOT_PROMPT },
     { path: ".ralph/prompts/report.md", content: DEFAULT_REPORT_PROMPT },
     { path: ".ralph/prompts/hooks/on-iteration.md", content: DEFAULT_ON_ITERATION_PROMPT },
     { path: ".ralph/prompts/hooks/on-complete.md", content: DEFAULT_ON_COMPLETE_PROMPT },
@@ -124,13 +144,21 @@ export async function setup(args: string[]) {
   checkRepoRoot();
   console.log("🔧 Ralph Setup\n");
 
-  await $`mkdir -p .ralph/features`.quiet();
+  await $`mkdir -p .ralph/features .ralph/logs`.quiet();
   await createPromptFiles();
 
   const configFile = Bun.file(".ralph/config.json");
   if (!(await configFile.exists())) {
-    await writeConfig({ vcs: "git" });
-    console.log("📝 Created .ralph/config.json (vcs: git)");
+    await writeConfig({
+      models: {
+        backlog: "opus",
+        feature: "opus",
+        onIteration: "haiku",
+        onComplete: "haiku",
+        report: "opus",
+      },
+    });
+    console.log("📝 Created .ralph/config.json (models: opus)");
   }
 
   const backlogFile = Bun.file(".ralph/backlog.json");
@@ -180,7 +208,7 @@ export async function setup(args: string[]) {
   // Add runtime files to .gitignore
   const gitignorePath = ".gitignore";
   const gitignoreFile = Bun.file(gitignorePath);
-  const entriesToAdd = [".ralph/state.json", ".ralph/queue.json"];
+  const entriesToAdd = [".ralph/state.json", ".ralph/queue.json", ".ralph/logs/", ".ralph/mcp-config.json"];
 
   let gitignoreContent = (await gitignoreFile.exists()) ? await gitignoreFile.text() : "";
   const lines = gitignoreContent.split("\n");

@@ -30,4 +30,4 @@ export async function createExecutor(
 
 export { LocalExecutor } from "./local";
 export { DaytonaExecutor } from "./daytona";
-export type { Executor, ExecutionResult } from "../executor";
+export type { Executor, ExecutionResult, ExecuteOptions } from "../executor";

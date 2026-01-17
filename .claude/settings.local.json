@@ -20,7 +20,11 @@
       "WebFetch(domain:www.daytona.io)",
       "Bash(git ls-tree:*)",
       "Bash(wc:*)",
-      "Bash(ralph test-queue:*)"
+      "Bash(ralph test-queue:*)",
+      "Bash(bun cli.ts:*)",
+      "Bash(claude mcp:*)",
+      "Bash(systemctl:*)",
+      "Bash(npm search:*)"
     ],
     "additionalDirectories": [
       "/home/mathew/creations/deal-deploy"
