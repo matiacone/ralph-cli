@@ -12,7 +12,7 @@ import { watchMode } from "./src/commands/watch";
 import { status } from "./src/commands/status";
 import { list } from "./src/commands/list";
 import { cancel } from "./src/commands/cancel";
-import { report } from "./src/commands/report";
+import { prompt } from "./src/commands/prompt";
 import { deleteFeature } from "./src/commands/delete";
 import { queue } from "./src/commands/queue";
 import { testQueue } from "./src/commands/test-queue";
@@ -46,8 +46,8 @@ switch (command) {
   case "watch":
     await watchMode(args);
     break;
-  case "report":
-    await report(args);
+  case "prompt":
+    await prompt(args);
     break;
   case "delete":
     await deleteFeature(args);

@@ -7,7 +7,7 @@ export interface ModelConfig {
   feature?: ModelAlias;
   onIteration?: ModelAlias;
   onComplete?: ModelAlias;
-  report?: ModelAlias;
+  [promptName: string]: ModelAlias | undefined;
 }
 
 export interface ServiceConfig {
@@ -143,10 +143,14 @@ export async function getOneshotPrompt(name: string): Promise<string> {
   return `@${dir}/plan.md @${dir}/tasks.json @${dir}/progress.txt\n${instructions}`;
 }
 
-export async function getReportPrompt(name: string): Promise<string> {
-  const dir = getFeatureDir(name);
-  const promptPath = `${getPromptsDir()}/report.md`;
-  const instructions = await readPromptFile(promptPath);
+export async function getGenericPrompt(promptName: string, featureName: string): Promise<string> {
+  const dir = getFeatureDir(featureName);
+  const promptPath = `${getPromptsDir()}/${promptName}.md`;
+  const file = Bun.file(promptPath);
+  if (!(await file.exists())) {
+    throw new Error(`Prompt file not found: ${promptPath}`);
+  }
+  const instructions = await file.text();
 
   let gitLog = "";
   let gitDiff = "";
@@ -202,7 +206,7 @@ ${gitDiff}
 
   return `@${dir}/plan.md @${dir}/tasks.json @${dir}/progress.txt
 
-You are reviewing the progress of the "${name}" feature.
+You are reviewing the progress of the "${featureName}" feature.
 ${taskSummary}${gitSection}${diffSection}
 ${instructions}`;
 }

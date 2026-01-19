@@ -85,6 +85,19 @@ const DEFAULT_ON_ITERATION_PROMPT = `Review the changes made in the last iterati
 
 const DEFAULT_ON_COMPLETE_PROMPT = `Use the Task tool to spawn the code-simplifier agent to analyze recently modified code. After it completes, review its recommendations and add any worthwhile improvements to .ralph/backlog.json as new tasks. Mark new tasks with "passes": false.`;
 
+const DEFAULT_REVIEW_PROMPT = `You are reviewing the code changes for a feature.
+
+Focus on the actual code diff and provide a critical code review:
+- Code quality and clarity of the changes
+- Potential bugs, edge cases, or regressions introduced
+- Security concerns (injection vulnerabilities, auth issues, data exposure)
+- Performance implications (N+1 queries, unnecessary re-renders, memory leaks)
+- Adherence to project conventions and patterns
+- Opportunities for simplification or better abstractions
+
+Be specific - reference exact files, line numbers, and code snippets when identifying issues.
+Prioritize actionable feedback over general observations.`;
+
 const DEFAULT_ONESHOT_PROMPT = `You are completing a feature in a SINGLE session. Complete ALL tasks in tasks.json before ending.
 
 IMPORTANT: This is a oneshot run - there are no follow-up iterations. You must finish everything now.
@@ -112,6 +125,7 @@ async function createPromptFiles() {
     { path: ".ralph/prompts/feature.md", content: DEFAULT_FEATURE_PROMPT },
     { path: ".ralph/prompts/oneshot.md", content: DEFAULT_ONESHOT_PROMPT },
     { path: ".ralph/prompts/report.md", content: DEFAULT_REPORT_PROMPT },
+    { path: ".ralph/prompts/review.md", content: DEFAULT_REVIEW_PROMPT },
     { path: ".ralph/prompts/hooks/on-iteration.md", content: DEFAULT_ON_ITERATION_PROMPT },
     { path: ".ralph/prompts/hooks/on-complete.md", content: DEFAULT_ON_COMPLETE_PROMPT },
   ];

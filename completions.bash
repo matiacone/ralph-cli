@@ -5,7 +5,7 @@ _ralph_completions() {
   local cur="${COMP_WORDS[COMP_CWORD]}"
   local cmd="${COMP_WORDS[1]}"
 
-  local commands="setup feature oneshot backlog cancel status list watch report delete help completions"
+  local commands="setup feature oneshot backlog cancel status list watch prompt delete help completions"
 
   case "${cmd}" in
     setup)
@@ -33,10 +33,14 @@ _ralph_completions() {
     watch)
       [[ ${cur} == -* ]] && COMPREPLY=( $(compgen -W "--stream" -- "${cur}") )
       return ;;
-    report)
+    prompt)
       if [[ ${cur} == -* ]]; then
         COMPREPLY=( $(compgen -W "--first" -- "${cur}") )
       elif [[ ${COMP_CWORD} -eq 2 ]]; then
+        # Complete prompt names from .ralph/prompts/*.md
+        local prompts=$(ls .ralph/prompts/*.md 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/\.md$//')
+        COMPREPLY=( $(compgen -W "${prompts}" -- "${cur}") )
+      elif [[ ${COMP_CWORD} -eq 3 ]]; then
         local features=$(ralph completions --list-features all 2>/dev/null)
         COMPREPLY=( $(compgen -W "${features}" -- "${cur}") )
       fi

@@ -27,7 +27,10 @@ Commands:
   watch              Watch for new tasks and auto-run ralph
                      --stream              Stream Claude output in realtime
 
-  report <name>      Interactive review of feature progress
+  prompt <name> <feature>
+                     Run a prompt against a feature
+                     --first               Use most recent feature
+                     Example: ralph prompt report my-feature
 
   completions bash   Output bash completion script
                      Install: ralph completions bash >> ~/.bashrc
