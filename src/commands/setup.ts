@@ -117,6 +117,21 @@ IMPORTANT: This is a oneshot run - there are no follow-up iterations. You must f
 If you encounter blockers on a task, note them in progress.txt and continue to the next task.
 Do NOT stop until all tasks are either completed or documented as blocked.`;
 
+const DEFAULT_REFRESH_PROMPT = `Review the open/incomplete tasks and ensure they are still relevant and up to date with the current codebase state.
+
+For each incomplete task:
+1. Check if the task is still needed (hasn't been done elsewhere, isn't obsolete due to codebase changes)
+2. Verify the description and acceptance criteria are still accurate
+3. Check if dependencies or related code have changed in ways that affect the task
+
+Actions to take:
+- If a task has already been completed elsewhere, mark it as complete (set "passes": true)
+- If a task is no longer relevant, remove it from the list
+- If a task's description is outdated, update it to reflect current requirements
+- If you notice gaps or new work needed, suggest adding new tasks
+
+After reviewing, update the tasks file with your changes and summarize what was updated.`;
+
 async function createPromptFiles() {
   await $`mkdir -p .ralph/prompts/hooks`.quiet();
 
@@ -126,6 +141,7 @@ async function createPromptFiles() {
     { path: ".ralph/prompts/oneshot.md", content: DEFAULT_ONESHOT_PROMPT },
     { path: ".ralph/prompts/report.md", content: DEFAULT_REPORT_PROMPT },
     { path: ".ralph/prompts/review.md", content: DEFAULT_REVIEW_PROMPT },
+    { path: ".ralph/prompts/refresh.md", content: DEFAULT_REFRESH_PROMPT },
     { path: ".ralph/prompts/hooks/on-iteration.md", content: DEFAULT_ON_ITERATION_PROMPT },
     { path: ".ralph/prompts/hooks/on-complete.md", content: DEFAULT_ON_COMPLETE_PROMPT },
   ];

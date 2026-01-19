@@ -27,6 +27,13 @@ Commands:
   watch              Watch for new tasks and auto-run ralph
                      --stream              Stream Claude output in realtime
 
+  refresh <backlog | feature> [name]
+                     Review open tasks and update for relevance
+                     Examples:
+                       ralph refresh backlog
+                       ralph refresh feature
+                       ralph refresh feature my-feat
+
   prompt <name> <feature>
                      Run a prompt against a feature
                      --first               Use most recent feature

@@ -16,6 +16,7 @@ import { prompt } from "./src/commands/prompt";
 import { deleteFeature } from "./src/commands/delete";
 import { queue } from "./src/commands/queue";
 import { testQueue } from "./src/commands/test-queue";
+import { refresh } from "./src/commands/refresh";
 import { help } from "./src/commands/help";
 import { completions } from "./src/completions";
 
@@ -57,6 +58,9 @@ switch (command) {
     break;
   case "test-queue":
     await testQueue(args);
+    break;
+  case "refresh":
+    await refresh(args);
     break;
   case "completions":
     await completions(args);
