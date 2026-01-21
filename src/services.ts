@@ -23,7 +23,7 @@ export class ServiceManager {
   async startAll(): Promise<void> {
     await Bun.$`mkdir -p ${this.logsDir}`.quiet();
 
-    if (this.mcp?.playwriter?.enabled) {
+    if (this.mcp?.chrome?.enabled) {
       await this.generateMcpConfig();
     }
 
@@ -126,19 +126,9 @@ export class ServiceManager {
   }
 
   private async generateMcpConfig(): Promise<void> {
-    this.mcpConfigPath = ".ralph/mcp-config.json";
-
-    const config = {
-      mcpServers: {
-        playwriter: {
-          command: "npx",
-          args: ["-y", "playwriter@latest"],
-        },
-      },
-    };
-
-    await Bun.write(this.mcpConfigPath, JSON.stringify(config, null, 2));
-    console.log("✓ Generated MCP config for Playwriter");
+    // Note: /chrome is native to Claude Code via the claude-in-chrome extension
+    // No MCP config generation needed - just log that chrome is enabled
+    console.log("✓ Chrome browser automation enabled (use /chrome command)");
   }
 
   getMcpConfigPath(): string | null {

@@ -8,7 +8,7 @@ const DEFAULT_BACKLOG_PROMPT = `1. Find the highest-priority task to work on and
    You MUST verify your changes actually work before marking the task complete. This is NOT optional.
 
    For UI changes:
-   → Use the Playwright MCP to visually verify the changes render correctly
+   → Use the /chrome slash command to visually verify the changes render correctly
    → Take a screenshot and confirm the UI looks correct
 
    For backend changes (queries, mutations, actions, or any logic beyond trivial CRUD):
@@ -18,7 +18,7 @@ const DEFAULT_BACKLOG_PROMPT = `1. Find the highest-priority task to work on and
    FAILURE TO VERIFY = TASK NOT COMPLETE. If you skip verification, you are lying about the task being done.
 
 4. Update the backlog.json with the work that was done (set passes: true when complete).
-   Include in your progress entry WHAT verification you performed (e.g., "Verified: Playwright screenshot" or "Verified: unit test added" or "Verified: ran test:myFunction").
+   Include in your progress entry WHAT verification you performed (e.g., "Verified: /chrome screenshot" or "Verified: unit test added" or "Verified: ran test:myFunction").
 5. Append a concise progress entry to progress.txt:
    Format: [TIMESTAMP] Task: <title> | Branch: <branch> | Verified: <what verification was done> | <1-2 sentence summary> | Gotchas: <any important learnings, or "none">
 6. Make a git commit and submit PR:
@@ -40,7 +40,7 @@ const DEFAULT_FEATURE_PROMPT = `1. FIRST: Read the Branch field at the top of pl
    You MUST verify your changes actually work before marking the task complete. This is NOT optional.
 
    For UI changes:
-   → Use the Playwright MCP to visually verify the changes render correctly
+   → Use the /chrome slash command to visually verify the changes render correctly
    → Take a screenshot and confirm the UI looks correct
 
    For backend changes (queries, mutations, actions, or any logic beyond trivial CRUD):
@@ -50,7 +50,7 @@ const DEFAULT_FEATURE_PROMPT = `1. FIRST: Read the Branch field at the top of pl
    FAILURE TO VERIFY = TASK NOT COMPLETE. If you skip verification, you are lying about the task being done.
 
 5. Mark the task complete in tasks.json by setting "passes": true.
-   Include in your progress entry WHAT verification you performed (e.g., "Verified: Playwright screenshot" or "Verified: unit test added" or "Verified: ran test:myFunction").
+   Include in your progress entry WHAT verification you performed (e.g., "Verified: /chrome screenshot" or "Verified: unit test added" or "Verified: ran test:myFunction").
 6. Append a concise progress entry to progress.txt:
    Format: [TIMESTAMP] Task: <title> | Verified: <what verification was done> | <1-2 sentence summary> | Gotchas: <any important learnings, or "none">
 7. Make a git commit using the branch from plan.md:

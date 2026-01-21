@@ -20,7 +20,7 @@ export interface ServiceConfig {
 }
 
 export interface McpConfig {
-  playwriter?: {
+  chrome?: {
     enabled: boolean;
   };
 }
