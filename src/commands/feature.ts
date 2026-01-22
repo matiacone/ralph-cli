@@ -21,6 +21,7 @@ export async function feature(args: string[]) {
   const sandbox = args.includes("--sandbox");
   const debugMode = args.includes("--debug");
   const force = args.includes("--force");
+  const hooks = args.includes("--hooks");
 
   let name = args.find((a) => !a.startsWith("-"));
 
@@ -125,5 +126,6 @@ export async function feature(args: string[]) {
     debug: debugMode,
     model,
     modelConfig: config.models,
+    hooks,
   });
 }

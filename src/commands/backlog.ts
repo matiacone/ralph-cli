@@ -17,6 +17,7 @@ export async function backlog(args: string[]) {
   let once = false;
   let sandbox = false;
   let force = false;
+  let hooks = false;
 
   for (let i = 0; i < args.length; i++) {
     const nextArg = args[i + 1];
@@ -31,6 +32,8 @@ export async function backlog(args: string[]) {
       sandbox = true;
     } else if (args[i] === "--force") {
       force = true;
+    } else if (args[i] === "--hooks") {
+      hooks = true;
     }
   }
 
@@ -101,5 +104,6 @@ export async function backlog(args: string[]) {
     executor,
     model,
     modelConfig: config.models,
+    hooks,
   });
 }

@@ -116,9 +116,10 @@ export interface LoopConfig extends RunnerConfig {
   startIteration?: number;
   debug?: boolean;
   modelConfig?: ModelConfig;
+  hooks?: boolean;
 }
 
-async function runNextFromQueue(debugMode: boolean = false, modelConfig?: ModelConfig): Promise<boolean> {
+async function runNextFromQueue(debugMode: boolean = false, modelConfig?: ModelConfig, hooks?: boolean): Promise<boolean> {
   debug("runNextFromQueue", "Starting queue check");
 
   // Log queue state before popping
@@ -146,7 +147,7 @@ async function runNextFromQueue(debugMode: boolean = false, modelConfig?: ModelC
   if (!exists) {
     console.error(`${c.yellow}Queued feature '${next}' not found, skipping${c.reset}`);
     debug("runNextFromQueue", "Feature not found, recursing to next");
-    return runNextFromQueue(debugMode, modelConfig);
+    return runNextFromQueue(debugMode, modelConfig, hooks);
   }
 
   const progressFile = Bun.file(`${dir}/progress.txt`);
@@ -165,6 +166,7 @@ async function runNextFromQueue(debugMode: boolean = false, modelConfig?: ModelC
     debug: debugMode,
     model: modelConfig?.feature,
     modelConfig,
+    hooks,
   });
 
   debug("runNextFromQueue", `runLoop completed for "${next}"`);
@@ -286,15 +288,17 @@ export async function runLoop(config: LoopConfig): Promise<void> {
         debug("runLoop", "Sending notification");
         await notify("Ralph Complete", `${label} complete after ${i} iterations`);
 
-        debug("runLoop", "Running on-complete hook");
-        await runHook("on-complete", featureName, modelConfig?.onComplete);
+        if (config.hooks) {
+          debug("runLoop", "Running on-complete hook");
+          await runHook("on-complete", featureName, modelConfig?.onComplete);
+        }
 
         debug("runLoop", "Running executor cleanup");
         await executor.cleanup();
 
         // Check queue for next feature
         debug("runLoop", "About to check queue for next feature");
-        const ranNext = await runNextFromQueue(config.debug, modelConfig);
+        const ranNext = await runNextFromQueue(config.debug, modelConfig, config.hooks);
         debug("runLoop", `runNextFromQueue returned: ${ranNext}`);
 
         if (ranNext) {
@@ -317,7 +321,9 @@ export async function runLoop(config: LoopConfig): Promise<void> {
       console.log(`\n✓ Iteration ${i} complete\n`);
 
       // Run on-iteration hook to review work and potentially add follow-up tasks
-      await runHook("on-iteration", featureName, modelConfig?.onIteration);
+      if (config.hooks) {
+        await runHook("on-iteration", featureName, modelConfig?.onIteration);
+      }
     }
 
     console.log(`\n⚠️  Max iterations (${max}) reached`);

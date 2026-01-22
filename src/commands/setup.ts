@@ -226,14 +226,16 @@ export async function setup(args: string[]) {
     await Bun.write(progressFile, "");
   }
 
-  await writeState({
-    iteration: 0,
-    maxIterations,
-    status: "initialized",
-    startedAt: new Date().toISOString(),
-  });
-
-  console.log(`✓ State initialized (max ${maxIterations} iterations)`);
+  const stateFile = Bun.file(".ralph/state.json");
+  if (!(await stateFile.exists())) {
+    await writeState({
+      iteration: 0,
+      maxIterations,
+      status: "initialized",
+      startedAt: new Date().toISOString(),
+    });
+    console.log(`✓ State initialized (max ${maxIterations} iterations)`);
+  }
 
   // Add runtime files to .gitignore
   const gitignorePath = ".gitignore";
