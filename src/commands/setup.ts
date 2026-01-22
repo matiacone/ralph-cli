@@ -30,7 +30,7 @@ const DEFAULT_BACKLOG_PROMPT = `1. Find the highest-priority task to work on and
      * Use 'git add -A && git commit -m "<message>"' to add a new commit
      * Then use 'git push' to push and update the PR
 ONLY WORK ON A SINGLE TASK.
-If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>STUCK</promise> with a brief summary of what you tried and what is blocking progress.`;
+If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>I AM STUCK</promise> with a brief summary of what you tried and what is blocking progress.`;
 
 const DEFAULT_FEATURE_PROMPT = `1. FIRST: Read the Branch field at the top of plan.md. You MUST use this branch for all commits.
 2. Review plan.md for context, then find the highest-priority incomplete task in tasks.json.
@@ -62,7 +62,7 @@ const DEFAULT_FEATURE_PROMPT = `1. FIRST: Read the Branch field at the top of pl
      * Use 'git add -A && git commit -m "<message>"' to add a new commit
      * Then use 'git push' to push and update the PR
 ONLY WORK ON A SINGLE TASK.
-If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>STUCK</promise> with a brief summary of what you tried and what is blocking progress.`;
+If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>I AM STUCK</promise> with a brief summary of what you tried and what is blocking progress.`;
 
 const DEFAULT_REPORT_PROMPT = `You are reviewing the progress of a feature.
 

@@ -56,7 +56,7 @@ describe("prompt functions", () => {
 bun run lint:fix
 bun run check-types
 bun run test
-<promise>STUCK</promise>`
+<promise>I AM STUCK</promise>`
     );
     await Bun.write(
       ".ralph/prompts/feature.md",
@@ -64,7 +64,7 @@ bun run test
 bun run lint:fix
 bun run check-types
 bun run test
-<promise>STUCK</promise>`
+<promise>I AM STUCK</promise>`
     );
     await Bun.write(".ralph/prompts/hooks/on-complete.md", "Run code simplifier");
     await Bun.write(".ralph/prompts/hooks/on-iteration.md", "Review changes");
@@ -88,7 +88,7 @@ bun run test
       expect(prompt).toContain("bun run lint:fix");
       expect(prompt).toContain("bun run check-types");
       expect(prompt).toContain("bun run test");
-      expect(prompt).toContain("<promise>STUCK</promise>");
+      expect(prompt).toContain("<promise>I AM STUCK</promise>");
     });
 
     test("throws error when prompt file missing", async () => {
@@ -109,7 +109,7 @@ bun run test
       expect(prompt).toContain("bun run lint:fix");
       expect(prompt).toContain("bun run check-types");
       expect(prompt).toContain("bun run test");
-      expect(prompt).toContain("<promise>STUCK</promise>");
+      expect(prompt).toContain("<promise>I AM STUCK</promise>");
     });
 
     test("throws error when prompt file missing", async () => {

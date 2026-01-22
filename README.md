@@ -97,7 +97,7 @@ ralph completions bash >> ~/.bashrc
 3. Claude runs linting, type checking, and tests
 4. Claude commits and creates/updates a PR
 5. If Claude outputs `<promise>COMPLETE</promise>`, Ralph exits successfully
-6. If Claude outputs `<promise>STUCK</promise>`, Ralph exits with an error
+6. If Claude outputs `<promise>I AM STUCK</promise>`, Ralph exits with an error
 7. Otherwise, Ralph starts the next iteration
 
 ## Requirements

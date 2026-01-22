@@ -126,5 +126,5 @@ describe("feature", () => {
 
 - `0` - Success/completed
 - `1` - Error
-- `2` - Stuck (Claude reported `<promise>STUCK</promise>`)
+- `2` - Stuck (Claude reported `<promise>I AM STUCK</promise>`)
 - `130` - Cancelled (SIGINT)

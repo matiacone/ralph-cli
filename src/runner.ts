@@ -310,7 +310,7 @@ export async function runLoop(config: LoopConfig): Promise<void> {
         process.exit(0);
       }
 
-      if (assistantText.includes("<promise>STUCK</promise>")) {
+      if (assistantText.includes("<promise>I AM STUCK</promise>")) {
         console.log("\n🛑 Claude is stuck");
         await writeState({ ...state, iteration: i, status: "stuck", feature: featureName });
         await notify("Ralph Stuck", `Exhausted options after ${i} iterations`, "high");

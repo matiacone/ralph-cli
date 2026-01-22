@@ -28,4 +28,4 @@
      * Use 'git add -A && git commit -m "<message>"' to add a new commit
      * Then use 'git push' to push and update the PR
 ONLY WORK ON A SINGLE TASK.
-If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>STUCK</promise> with a brief summary of what you tried and what is blocking progress.
+If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>I AM STUCK</promise> with a brief summary of what you tried and what is blocking progress.
