@@ -1,12 +1,15 @@
 {
   "name": "ralph-run",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Autonomous Claude Code runner that executes tasks from a backlog or feature plans",
   "bin": {
-    "ralph": "./dist/cli.js"
+    "ralph": "./bin/ralph.js"
   },
   "files": [
-    "dist"
+    "bin",
+    "cli.ts",
+    "lib.ts",
+    "src"
   ],
   "repository": {
     "type": "git",
