@@ -20,6 +20,11 @@ import { refresh } from "./src/commands/refresh";
 import { help } from "./src/commands/help";
 import { completions } from "./src/completions";
 
+async function version() {
+  const pkg = await Bun.file(import.meta.dir + "/package.json").json();
+  console.log(pkg.version);
+}
+
 const [command, ...args] = process.argv.slice(2);
 
 switch (command) {
@@ -64,6 +69,11 @@ switch (command) {
     break;
   case "completions":
     await completions(args);
+    break;
+  case "version":
+  case "--version":
+  case "-v":
+    await version();
     break;
   case "help":
   case "--help":
