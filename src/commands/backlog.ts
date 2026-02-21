@@ -4,18 +4,14 @@ import {
   readBacklog,
   readState,
   getBacklogPrompt,
-  getGitRemoteUrl,
-  getCurrentBranch,
   readConfig,
 } from "../../lib";
 import { runSingleIteration, runLoop } from "../runner";
-import { createExecutor } from "../executors";
 
 export async function backlog(args: string[]) {
   let maxIterations: number | undefined;
   let resume = false;
   let once = false;
-  let sandbox = false;
   let force = false;
   let hooks = false;
 
@@ -28,28 +24,10 @@ export async function backlog(args: string[]) {
       resume = true;
     } else if (args[i] === "--once") {
       once = true;
-    } else if (args[i] === "--sandbox") {
-      sandbox = true;
     } else if (args[i] === "--force") {
       force = true;
     } else if (args[i] === "--hooks") {
       hooks = true;
-    }
-  }
-
-  if (sandbox && once) {
-    console.error("❌ --sandbox and --once cannot be used together");
-    process.exit(1);
-  }
-
-  if (sandbox) {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.error("❌ ANTHROPIC_API_KEY environment variable is required for --sandbox mode");
-      process.exit(1);
-    }
-    if (!process.env.GH_TOKEN) {
-      console.error("❌ GH_TOKEN environment variable is required for --sandbox mode");
-      process.exit(1);
     }
   }
 
@@ -90,18 +68,10 @@ export async function backlog(args: string[]) {
   const config = await readConfig();
   const model = config.models?.backlog;
 
-  let executor;
-  if (sandbox) {
-    const repoUrl = await getGitRemoteUrl();
-    const branch = await getCurrentBranch();
-    executor = await createExecutor({ sandbox: true, repoUrl, branch });
-  }
-
   await runLoop({
     ...runnerConfig,
     maxIterations,
     startIteration,
-    executor,
     model,
     modelConfig: config.models,
     hooks,

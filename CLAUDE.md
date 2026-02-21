@@ -19,7 +19,7 @@ lib.ts              # Core utilities (state, config, prompts)
 lib.test.ts         # Tests
 src/
   commands/         # CLI commands (setup, backlog, feature, watch, list, etc.)
-  executors/        # Execution backends (local, daytona)
+  executors/        # Execution backends (local)
   runner.ts         # Iteration loop logic
   formatter.ts      # Stream JSON parsing from Claude output
   colors.ts         # ANSI color constants
@@ -57,7 +57,7 @@ interface Executor {
 }
 ```
 
-Use `createExecutor(sandbox: boolean)` factory from `src/executors/index.ts`.
+Use `LocalExecutor` from `src/executors/local.ts`.
 
 ### State Files
 All state lives in `.ralph/`:
@@ -103,9 +103,6 @@ describe("feature", () => {
 
 ## Environment Variables
 
-- `ANTHROPIC_API_KEY` - Required for Claude execution
-- `GH_TOKEN` - GitHub token for sandbox git operations
-- `DAYTONA_API_KEY` - Daytona sandbox API key
 - `NTFY_URL` - Optional notification URL
 
 ## CLI Commands

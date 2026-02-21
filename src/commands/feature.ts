@@ -5,20 +5,16 @@ import {
   listFeatures,
   getMostRecentFeature,
   getFeaturePrompt,
-  getGitRemoteUrl,
-  getCurrentBranch,
   isRalphRunning,
   addToQueue,
   readConfig,
 } from "../../lib";
 import { c } from "../colors";
 import { runSingleIteration, runLoop } from "../runner";
-import { createExecutor } from "../executors";
 
 export async function feature(args: string[]) {
   const first = args.includes("--first");
   const once = args.includes("--once");
-  const sandbox = args.includes("--sandbox");
   const debugMode = args.includes("--debug");
   const force = args.includes("--force");
   const hooks = args.includes("--hooks");
@@ -45,22 +41,6 @@ export async function feature(args: string[]) {
       console.error("\nNo features found. Create one with: /create-ralph-plan <name>");
     }
     process.exit(1);
-  }
-
-  if (sandbox && once) {
-    console.error("❌ --sandbox and --once cannot be used together");
-    process.exit(1);
-  }
-
-  if (sandbox) {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.error("❌ ANTHROPIC_API_KEY environment variable is required for --sandbox mode");
-      process.exit(1);
-    }
-    if (!process.env.GH_TOKEN) {
-      console.error("❌ GH_TOKEN environment variable is required for --sandbox mode");
-      process.exit(1);
-    }
   }
 
   checkRepoRoot();
@@ -113,16 +93,8 @@ export async function feature(args: string[]) {
   const config = await readConfig();
   const model = config.models?.feature;
 
-  let executor;
-  if (sandbox) {
-    const repoUrl = await getGitRemoteUrl();
-    const branch = await getCurrentBranch();
-    executor = await createExecutor({ sandbox: true, repoUrl, branch });
-  }
-
   await runLoop({
     ...runnerConfig,
-    executor,
     debug: debugMode,
     model,
     modelConfig: config.models,
