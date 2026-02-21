@@ -19,13 +19,11 @@
    Include in your progress entry WHAT verification you performed (e.g., "Verified: /chrome screenshot" or "Verified: unit test added" or "Verified: ran test:myFunction").
 6. Append a concise progress entry to progress.txt:
    Format: [TIMESTAMP] Task: <title> | Verified: <what verification was done> | <1-2 sentence summary> | Gotchas: <any important learnings, or "none">
-7. Make a git commit using the branch from plan.md:
-   - Check the current branch with 'git branch --show-current'
-   - If you are NOT on the branch specified in plan.md:
-     * Use 'git checkout -b <branch-name> && git add -A && git commit -m "<message>"' to create the branch with the exact name from plan.md
-     * Then use 'git push -u origin HEAD && gh pr create --fill' to push and create a PR
-   - If you are already on the correct branch:
-     * Use 'git add -A && git commit -m "<message>"' to add a new commit
-     * Then use 'git push' to push and update the PR
+7. Use the `/ralph:commit` command to commit and submit. This is MANDATORY.
+   ⚠️ NEVER run git or graphite commands yourself (no `git checkout`, `git commit`, `gt create`, `gt track`, etc.)
+   ⚠️ NEVER checkout develop/main before creating the branch - the branch must be created from your current stack position
+   - The `/ralph:commit` command reads the branch name from plan.md and handles everything
+   - Each task gets its own commit on the SAME branch
+   - If you see yourself running `gt track`, STOP - that means you created the branch wrong with raw git
 ONLY WORK ON A SINGLE TASK.
 If you have tried 3+ different approaches to fix the same lint/type/test failures and they continue to fail, output <promise>I AM STUCK</promise> with a brief summary of what you tried and what is blocking progress.
