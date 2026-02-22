@@ -5,7 +5,6 @@ export async function run(args: string[]) {
   const once = args.includes("--once");
   const debugMode = args.includes("--debug");
   const force = args.includes("--force");
-  const hooks = args.includes("--hooks");
 
   checkRepoRoot();
   if (!force) await checkCleanWorkingTree();
@@ -27,6 +26,5 @@ export async function run(args: string[]) {
     debug: debugMode,
     model: config.models?.feature,
     modelConfig: config.models,
-    hooks,
   });
 }

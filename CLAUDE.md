@@ -1,6 +1,6 @@
 # Ralph
 
-Autonomous Claude Code runner that executes tasks from a backlog or feature plans in iterations until completion.
+Autonomous Claude Code runner that works through GitHub issues in iterations until completion.
 
 ## Runtime
 
@@ -14,16 +14,21 @@ Use Bun, not Node.js.
 ## Project Structure
 
 ```
-cli.ts              # Main CLI entry point with command router
+cli.ts              # Main CLI entry point (setup, run, help)
 lib.ts              # Core utilities (state, config, prompts)
 lib.test.ts         # Tests
 src/
-  commands/         # CLI commands (setup, backlog, feature, watch, list, etc.)
+  commands/
+    run.ts          # ralph run command
+    setup.ts        # ralph setup command
+    help.ts         # Help text
   executors/        # Execution backends (local)
   runner.ts         # Iteration loop logic
   formatter.ts      # Stream JSON parsing from Claude output
+  services.ts       # Service manager for background processes
   colors.ts         # ANSI color constants
-.ralph/             # State directory (JSON files)
+  debug.ts          # Debug logging
+.ralph/             # State directory
 ```
 
 ## Key Patterns
@@ -40,84 +45,32 @@ await Bun.write(path, JSON.stringify(data, null, 2));
 await Bun.$`git status`;
 ```
 
-### Commands
-Commands are async functions in `src/commands/`. Route them in `cli.ts`:
-```ts
-export async function myCommand(args: string[]) {
-  const dir = checkRepoRoot(); // Always check first
-  // ...
-}
-```
-
-### Executors
-Implement the `Executor` interface for new execution backends:
-```ts
-interface Executor {
-  run(prompt: string): Promise<string>;
-}
-```
-
-Use `LocalExecutor` from `src/executors/local.ts`.
-
 ### State Files
 All state lives in `.ralph/`:
-- `state.json` - Iteration count, status, current feature
-- `backlog.json` - Task list
+- `state.json` - Iteration count, status
 - `config.json` - Model configuration
 - `progress.txt` - Append-only log
-
-### Output Formatting
-Use colors from `src/colors.ts`:
-```ts
-import { colors } from "../colors";
-console.log(`${colors.green}Success${colors.reset}`);
-```
-
-## Testing
-
-```ts
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm } from "fs/promises";
-import { tmpdir } from "os";
-
-describe("feature", () => {
-  let testDir: string;
-  let originalCwd: string;
-
-  beforeEach(async () => {
-    originalCwd = process.cwd();
-    testDir = await mkdtemp(`${tmpdir()}/test-`);
-    process.chdir(testDir);
-  });
-
-  afterEach(async () => {
-    process.chdir(originalCwd);
-    await rm(testDir, { recursive: true });
-  });
-
-  test("does thing", () => {
-    expect(true).toBe(true);
-  });
-});
-```
-
-## Environment Variables
-
-- `NTFY_URL` - Optional notification URL
+- `prompts/run.md` - Customizable run prompt
 
 ## CLI Commands
 
 | Command | Purpose |
 |---------|---------|
 | `ralph setup` | Initialize Ralph in a project |
-| `ralph backlog` | Run backlog tasks |
-| `ralph feature <name>` | Run a feature plan |
-| `ralph oneshot <name>` | Run feature in single session |
-| `ralph watch` | Auto-run on task changes |
-| `ralph list` | Show tasks and status |
-| `ralph report <name>` | Interactive feature review |
-| `ralph status` | Show current state |
-| `ralph cancel` | Stop running session |
+| `ralph run` | Work through GitHub issues autonomously |
+| `ralph run --once` | Run single iteration only |
+| `ralph run --debug` | Enable debug logging |
+| `ralph run --force` | Skip clean working tree check |
+
+## How It Works
+
+Each iteration:
+1. Claude runs `gh issue list` to find open issues
+2. Claude picks the most important unblocked issue
+3. If the issue is part of a feature (prefixed "XYZ: "), reads the artifact PRD for context
+4. Claude implements, verifies, commits, closes the issue
+5. Runner runs Claude again → repeat
+6. When no open issues remain → outputs `<promise>ALL TASKS COMPLETE</promise>` → runner exits
 
 ## Exit Codes
 
@@ -125,3 +78,7 @@ describe("feature", () => {
 - `1` - Error
 - `2` - Stuck (Claude reported `<promise>I AM STUCK</promise>`)
 - `130` - Cancelled (SIGINT)
+
+## Environment Variables
+
+- `NTFY_URL` - Optional notification URL

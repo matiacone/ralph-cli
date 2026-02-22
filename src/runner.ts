@@ -4,15 +4,7 @@ import {
   notify,
   readState,
   writeState,
-  hasOpenTasks,
-  popQueue,
-  readQueue,
-  getFeatureDir,
-  getFeaturePrompt,
-  getHookPrompt,
-  setQueueDebugger,
   readConfig,
-  type TaskFile,
   type ModelAlias,
   type ModelConfig,
 } from "../lib";
@@ -20,77 +12,8 @@ import type { Executor } from "./executor";
 import { LocalExecutor } from "./executors/local";
 import { debug, setDebug } from "./debug";
 
-async function runHook(hookName: string, featureName?: string, model?: ModelAlias): Promise<void> {
-  const prompt = await getHookPrompt(hookName, featureName);
-  if (!prompt) {
-    debug("runHook", `Hook "${hookName}" not found, skipping`);
-    return;
-  }
-
-  console.log(`\n${c.cyan}Running ${hookName} hook...${c.reset}\n`);
-
-  const args = [
-    "claude",
-    "--permission-mode",
-    "acceptEdits",
-    "-p",
-    "--output-format",
-    "stream-json",
-    "--verbose",
-  ];
-
-  if (model) {
-    args.push("--model", model);
-  }
-
-  args.push(prompt);
-
-  // Strip ANTHROPIC_API_KEY so claude uses OAuth (Max plan) instead of API credits
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => key !== "ANTHROPIC_API_KEY")
-  );
-
-  const proc = Bun.spawn(args, {
-    stdio: ["inherit", "pipe", "pipe"],
-    env,
-  });
-
-  const formatter = new StreamFormatter();
-  const decoder = new TextDecoder();
-
-  const readStream = async (
-    stream: ReadableStream<Uint8Array>,
-    handler: (chunk: string) => void
-  ) => {
-    const reader = stream.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const text = decoder.decode(value);
-      handler(text);
-    }
-  };
-
-  await Promise.all([
-    readStream(proc.stdout, (chunk) => {
-      const { output } = formatter.parse(chunk);
-      if (output) process.stdout.write(output);
-    }),
-    readStream(proc.stderr, (chunk) => {
-      process.stderr.write(chunk);
-    }),
-  ]);
-
-  const remaining = formatter.flush();
-  if (remaining) process.stdout.write(remaining);
-
-  await proc.exited;
-}
-
 export interface RunnerConfig {
   prompt: string;
-  featureName?: string;
-  tasksFilePath?: string;
   label: string;
   executor?: Executor;
   model?: ModelAlias;
@@ -103,7 +26,7 @@ export interface IterationResult {
 }
 
 export async function runSingleIteration(config: RunnerConfig): Promise<IterationResult> {
-  const { prompt, featureName, label } = config;
+  const { prompt, label } = config;
 
   console.log(`🔄 Ralph ${label} (single iteration)\n`);
 
@@ -126,74 +49,17 @@ export interface LoopConfig extends RunnerConfig {
   startIteration?: number;
   debug?: boolean;
   modelConfig?: ModelConfig;
-  hooks?: boolean;
-}
-
-async function runNextFromQueue(debugMode: boolean = false, modelConfig?: ModelConfig, hooks?: boolean): Promise<boolean> {
-  debug("runNextFromQueue", "Starting queue check");
-
-  // Log queue state before popping
-  const queueBefore = await readQueue();
-  debug("runNextFromQueue", "Queue state before pop", { items: queueBefore });
-
-  const next = await popQueue();
-  debug("runNextFromQueue", `popQueue returned: ${next ?? "null"}`);
-
-  if (!next) {
-    debug("runNextFromQueue", "No items in queue, returning false");
-    return false;
-  }
-
-  console.log(`\n${c.cyan}Starting next queued feature:${c.reset} ${next}\n`);
-
-  const dir = getFeatureDir(next);
-  const tasksFilePath = `${dir}/tasks.json`;
-  debug("runNextFromQueue", `Feature dir: ${dir}, tasks: ${tasksFilePath}`);
-
-  const tasksFile = Bun.file(tasksFilePath);
-  const exists = await tasksFile.exists();
-  debug("runNextFromQueue", `Tasks file exists: ${exists}`);
-
-  if (!exists) {
-    console.error(`${c.yellow}Queued feature '${next}' not found, skipping${c.reset}`);
-    debug("runNextFromQueue", "Feature not found, recursing to next");
-    return runNextFromQueue(debugMode, modelConfig, hooks);
-  }
-
-  const progressFile = Bun.file(`${dir}/progress.txt`);
-  if (!(await progressFile.exists())) {
-    await Bun.write(progressFile, "");
-  }
-
-  const prompt = await getFeaturePrompt(next);
-  debug("runNextFromQueue", `Starting runLoop for "${next}"`);
-
-  await runLoop({
-    prompt,
-    featureName: next,
-    tasksFilePath,
-    label: `Feature: ${next}`,
-    debug: debugMode,
-    model: modelConfig?.feature,
-    modelConfig,
-    hooks,
-  });
-
-  debug("runNextFromQueue", `runLoop completed for "${next}"`);
-  return true;
 }
 
 export async function runLoop(config: LoopConfig): Promise<void> {
-  const { prompt, featureName, tasksFilePath, label, maxIterations, startIteration } = config;
+  const { prompt, label, maxIterations, startIteration } = config;
 
-  // Initialize debug mode
   if (config.debug) {
     setDebug(true);
-    setQueueDebugger(debug);
     debug("runLoop", "Debug mode enabled");
   }
 
-  debug("runLoop", `Starting loop for "${featureName}"`, { tasksFilePath, label });
+  debug("runLoop", `Starting loop`, { label });
   console.log(`🤖 Ralph ${label} - Autonomous Loop\n`);
 
   const state = await readState();
@@ -202,7 +68,6 @@ export async function runLoop(config: LoopConfig): Promise<void> {
     process.exit(1);
   }
 
-  // Load model config from config.json if not provided
   const ralphConfig = await readConfig();
   const modelConfig = config.modelConfig ?? ralphConfig.models;
   const iterationModel = config.model;
@@ -214,9 +79,6 @@ export async function runLoop(config: LoopConfig): Promise<void> {
     console.log(`📍 Resuming from iteration ${current}\n`);
   }
 
-  if (tasksFilePath) {
-    console.log(`Tasks: ${tasksFilePath}`);
-  }
   console.log(`Max iterations: ${max}`);
   if (iterationModel) {
     console.log(`Model: ${iterationModel}`);
@@ -224,14 +86,14 @@ export async function runLoop(config: LoopConfig): Promise<void> {
   console.log(`Starting from: ${current + 1}\n`);
   console.log("Press Ctrl+C to cancel\n");
 
-  await writeState({ ...state, status: "running", feature: featureName });
+  await writeState({ ...state, status: "running" });
 
   const executor = config.executor ?? new LocalExecutor();
   await executor.initialize();
 
   const cleanup = async () => {
     console.log(`\n${c.yellow}Cancelling...${c.reset}`);
-    await writeState({ ...state, status: "cancelled", feature: featureName });
+    await writeState({ ...state, status: "cancelled" });
     await executor.cleanup();
     process.exit(130);
   };
@@ -262,99 +124,37 @@ export async function runLoop(config: LoopConfig): Promise<void> {
       if (remaining) process.stdout.write(remaining);
 
       const assistantText = formatter.getAssistantText();
-      await writeState({ ...state, iteration: i, status: "running", feature: featureName });
+      await writeState({ ...state, iteration: i, status: "running" });
 
       if (result.exitCode !== 0) {
         console.error(`\n❌ Claude exited with code ${result.exitCode}`);
-        await writeState({ ...state, iteration: i, status: "error", feature: featureName });
+        await writeState({ ...state, iteration: i, status: "error" });
         await notify("Ralph Error", `Claude exited with code ${result.exitCode} after ${i} iterations`, "high");
         await executor.cleanup();
         process.exit(result.exitCode);
       }
 
-      // Check task-file-based completion (for feature/backlog modes)
-      if (tasksFilePath) {
-        const taskFileContent = await executor.readFile(tasksFilePath);
-        debug("runLoop", `Read tasks file, content length: ${taskFileContent?.length ?? 0}`);
-
-        let taskFile: TaskFile | null = null;
-        if (taskFileContent) {
-          try {
-            taskFile = JSON.parse(taskFileContent) as TaskFile;
-            debug("runLoop", "Parsed tasks file", {
-              taskCount: taskFile.tasks.length,
-              openTasks: taskFile.tasks.filter((t) => !t.passes).length,
-            });
-          } catch (err) {
-            debug("runLoop", `Failed to parse tasks file: ${err}`);
-            taskFile = null;
-          }
-        }
-
-        const allComplete = taskFile && !hasOpenTasks(taskFile);
-        debug("runLoop", `All tasks complete: ${allComplete}`);
-
-        if (allComplete) {
-          console.log("\n✅ All tasks complete!");
-          debug("runLoop", "Writing completed state");
-          await writeState({ ...state, iteration: i, status: "completed", feature: featureName });
-
-          debug("runLoop", "Sending notification");
-          await notify("Ralph Complete", `${label} complete after ${i} iterations`);
-
-          if (config.hooks) {
-            debug("runLoop", "Running on-complete hook");
-            await runHook("on-complete", featureName, modelConfig?.onComplete);
-          }
-
-          debug("runLoop", "Running executor cleanup");
-          await executor.cleanup();
-
-          // Check queue for next feature
-          debug("runLoop", "About to check queue for next feature");
-          const ranNext = await runNextFromQueue(config.debug, modelConfig, config.hooks);
-          debug("runLoop", `runNextFromQueue returned: ${ranNext}`);
-
-          if (ranNext) {
-            debug("runLoop", "Next feature started, returning from runLoop");
-            return;
-          }
-
-          debug("runLoop", "No queued features, exiting with code 0");
-          process.exit(0);
-        }
-      }
-
-      // Check token-based completion (for run mode)
       if (assistantText.includes("<promise>ALL TASKS COMPLETE</promise>")) {
         console.log("\n✅ All tasks complete!");
-        await writeState({ ...state, iteration: i, status: "completed", feature: featureName });
+        await writeState({ ...state, iteration: i, status: "completed" });
         await notify("Ralph Complete", `${label} complete after ${i} iterations`);
-        if (config.hooks) {
-          await runHook("on-complete", featureName, modelConfig?.onComplete);
-        }
         await executor.cleanup();
         process.exit(0);
       }
 
       if (assistantText.includes("<promise>I AM STUCK</promise>")) {
         console.log("\n🛑 Claude is stuck");
-        await writeState({ ...state, iteration: i, status: "stuck", feature: featureName });
+        await writeState({ ...state, iteration: i, status: "stuck" });
         await notify("Ralph Stuck", `Exhausted options after ${i} iterations`, "high");
         await executor.cleanup();
         process.exit(2);
       }
 
       console.log(`\n✓ Iteration ${i} complete\n`);
-
-      // Run on-iteration hook to review work and potentially add follow-up tasks
-      if (config.hooks) {
-        await runHook("on-iteration", featureName, modelConfig?.onIteration);
-      }
     }
 
     console.log(`\n⚠️  Max iterations (${max}) reached`);
-    await writeState({ ...state, iteration: max, status: "max_iterations_reached", feature: featureName });
+    await writeState({ ...state, iteration: max, status: "max_iterations_reached" });
     await notify("Ralph Max Iterations", `Reached ${max} iterations`);
     await executor.cleanup();
     process.exit(1);
