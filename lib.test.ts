@@ -7,6 +7,8 @@ import {
   getRunPrompt,
   readState,
   writeState,
+  readConfig,
+  writeConfig,
   checkRepoRoot,
 } from "./lib";
 
@@ -97,6 +99,41 @@ describe("file operations", () => {
 
       const content = await Bun.file(".ralph/state.json").text();
       expect(content).toBe(JSON.stringify(state, null, 2));
+    });
+  });
+
+  describe("readConfig", () => {
+    test("returns empty object when config file does not exist", async () => {
+      const result = await readConfig();
+      expect(result).toEqual({});
+    });
+
+    test("returns parsed config when file exists", async () => {
+      const config = { models: { feature: "opus" as const }, services: [] };
+      await Bun.write(".ralph/config.json", JSON.stringify(config));
+
+      const result = await readConfig();
+      expect(result).toEqual(config);
+    });
+  });
+
+  describe("writeConfig", () => {
+    test("writes config with 2-space indentation", async () => {
+      const config = { models: { feature: "sonnet" as const } };
+      await writeConfig(config);
+
+      const content = await Bun.file(".ralph/config.json").text();
+      expect(content).toBe(JSON.stringify(config, null, 2));
+    });
+
+    test("roundtrips through readConfig", async () => {
+      const config = {
+        models: { feature: "haiku" as const },
+        services: [{ name: "dev", command: "npm", args: ["run", "dev"] }],
+      };
+      await writeConfig(config);
+      const result = await readConfig();
+      expect(result).toEqual(config);
     });
   });
 });
