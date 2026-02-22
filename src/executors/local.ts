@@ -39,8 +39,14 @@ export class LocalExecutor implements Executor {
 
     args.push(prompt);
 
+    // Strip ANTHROPIC_API_KEY so claude uses OAuth (Max plan) instead of API credits
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => key !== "ANTHROPIC_API_KEY")
+    );
+
     const proc = Bun.spawn(args, {
       stdio: ["inherit", "pipe", "pipe"],
+      env,
     });
 
     let output = "";

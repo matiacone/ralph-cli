@@ -117,6 +117,34 @@ IMPORTANT: This is a oneshot run - there are no follow-up iterations. You must f
 If you encounter blockers on a task, note them in progress.txt and continue to the next task.
 Do NOT stop until all tasks are either completed or documented as blocked.`;
 
+export const DEFAULT_RUN_PROMPT = `You are an autonomous agent working through GitHub issues for this repo.
+
+1. Run \`gh issue list --state open --json number,title,body,labels\` to see all open issues.
+2. If there are NO open issues, output <promise>ALL TASKS COMPLETE</promise> and stop immediately.
+3. Determine the most important issue to work on:
+   - Check each issue's "Blocked by" section — only pick issues whose blockers are all closed
+   - Prioritize unblocked issues by importance/dependency order
+4. If the issue title is prefixed with "XYZ: " (e.g., "Search: Create search record"):
+   - There should be an artifact issue titled "XYZ Artifact: ..." (e.g., "Search Artifact: ...")
+   - Use \`gh issue view <artifact-number>\` to read the full feature plan for context
+5. Use \`gh issue view <number>\` to read the full issue details
+6. Implement the task:
+   - If the change touches backend code, use the \`/tdd\` skill to drive the implementation
+   - Lint: bun run lint:fix
+   - Types: bun run check-types
+   - Tests: bun run test
+7. Verify your work:
+   - Use tests and/or browser verification (via /chrome) to confirm the changes work
+8. Commit using \`/ralph-commit\`:
+   - **Artifact issues** (title prefixed "XYZ: "): Use ONE branch for the entire feature (e.g., \`ralph/search\`). All issues under the same artifact go on the same branch.
+   - **Standalone issues**: Create one branch per issue (e.g., \`ralph/fix-login-bug\`)
+9. Close the issue: \`gh issue close <number>\`
+10. Append progress to .ralph/progress.txt:
+    [TIMESTAMP] Issue #<number>: <title> | Verified: <method> | <summary> | Gotchas: <notes>
+
+ONLY WORK ON A SINGLE ISSUE PER ITERATION.
+If you have tried 3+ approaches and cannot make progress, output <promise>I AM STUCK</promise>`;
+
 const DEFAULT_REFRESH_PROMPT = `Review the open/incomplete tasks and ensure they are still relevant and up to date with the current codebase state.
 
 For each incomplete task:
@@ -136,6 +164,7 @@ async function createPromptFiles() {
   await $`mkdir -p .ralph/prompts/hooks`.quiet();
 
   const prompts = [
+    { path: ".ralph/prompts/run.md", content: DEFAULT_RUN_PROMPT },
     { path: ".ralph/prompts/backlog.md", content: DEFAULT_BACKLOG_PROMPT },
     { path: ".ralph/prompts/feature.md", content: DEFAULT_FEATURE_PROMPT },
     { path: ".ralph/prompts/oneshot.md", content: DEFAULT_ONESHOT_PROMPT },

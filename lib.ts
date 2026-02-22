@@ -123,6 +123,18 @@ export async function getMostRecentFeature(): Promise<string | null> {
   return mostRecent?.name ?? null;
 }
 
+export async function getRunPrompt(): Promise<string> {
+  const promptPath = `${getPromptsDir()}/run.md`;
+  const file = Bun.file(promptPath);
+  if (!(await file.exists())) {
+    // Create default run.md for repos that haven't re-run setup
+    const { DEFAULT_RUN_PROMPT } = await import("./src/commands/setup");
+    await Bun.write(file, DEFAULT_RUN_PROMPT);
+  }
+  const instructions = await file.text();
+  return `@.ralph/progress.txt\n${instructions}`;
+}
+
 export async function getBacklogPrompt(): Promise<string> {
   const promptPath = `${getPromptsDir()}/backlog.md`;
   const instructions = await readPromptFile(promptPath);

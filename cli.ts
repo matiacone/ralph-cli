@@ -5,6 +5,7 @@ import { autoUpdate } from "./src/auto-update";
 await autoUpdate();
 
 import { setup } from "./src/commands/setup";
+import { run } from "./src/commands/run";
 import { feature } from "./src/commands/feature";
 import { oneshot } from "./src/commands/oneshot";
 import { backlog } from "./src/commands/backlog";
@@ -30,6 +31,9 @@ const [command, ...args] = process.argv.slice(2);
 switch (command) {
   case "setup":
     await setup(args);
+    break;
+  case "run":
+    await run(args);
     break;
   case "feature":
     await feature(args);

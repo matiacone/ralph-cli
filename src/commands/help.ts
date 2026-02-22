@@ -4,6 +4,12 @@ export function help() {
 Usage: ralph <command> [options]
 
 Commands:
+  run                Work through GitHub issues autonomously
+                     --once                Run single iteration only
+                     --debug               Enable debug logging
+                     --force               Skip clean working tree check
+                     --hooks               Run iteration/completion hooks
+
   setup              Initialize Ralph in current project
                      --max-iterations <n>  Set max iterations (default: 50)
 

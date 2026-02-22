@@ -45,8 +45,14 @@ async function runHook(hookName: string, featureName?: string, model?: ModelAlia
 
   args.push(prompt);
 
+  // Strip ANTHROPIC_API_KEY so claude uses OAuth (Max plan) instead of API credits
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key !== "ANTHROPIC_API_KEY")
+  );
+
   const proc = Bun.spawn(args, {
     stdio: ["inherit", "pipe", "pipe"],
+    env,
   });
 
   const formatter = new StreamFormatter();
@@ -84,7 +90,7 @@ async function runHook(hookName: string, featureName?: string, model?: ModelAlia
 export interface RunnerConfig {
   prompt: string;
   featureName?: string;
-  tasksFilePath: string;
+  tasksFilePath?: string;
   label: string;
   executor?: Executor;
   model?: ModelAlias;
@@ -102,8 +108,12 @@ export async function runSingleIteration(config: RunnerConfig): Promise<Iteratio
   console.log(`🔄 Ralph ${label} (single iteration)\n`);
 
   const args = ["claude", "--permission-mode", "acceptEdits", prompt];
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key !== "ANTHROPIC_API_KEY")
+  );
   const proc = Bun.spawn(args, {
     stdio: ["inherit", "inherit", "inherit"],
+    env,
   });
 
   const code = await proc.exited;
@@ -204,7 +214,9 @@ export async function runLoop(config: LoopConfig): Promise<void> {
     console.log(`📍 Resuming from iteration ${current}\n`);
   }
 
-  console.log(`Tasks: ${tasksFilePath}`);
+  if (tasksFilePath) {
+    console.log(`Tasks: ${tasksFilePath}`);
+  }
   console.log(`Max iterations: ${max}`);
   if (iterationModel) {
     console.log(`Model: ${iterationModel}`);
@@ -260,53 +272,68 @@ export async function runLoop(config: LoopConfig): Promise<void> {
         process.exit(result.exitCode);
       }
 
-      const taskFileContent = await executor.readFile(tasksFilePath);
-      debug("runLoop", `Read tasks file, content length: ${taskFileContent?.length ?? 0}`);
+      // Check task-file-based completion (for feature/backlog modes)
+      if (tasksFilePath) {
+        const taskFileContent = await executor.readFile(tasksFilePath);
+        debug("runLoop", `Read tasks file, content length: ${taskFileContent?.length ?? 0}`);
 
-      let taskFile: TaskFile | null = null;
-      if (taskFileContent) {
-        try {
-          taskFile = JSON.parse(taskFileContent) as TaskFile;
-          debug("runLoop", "Parsed tasks file", {
-            taskCount: taskFile.tasks.length,
-            openTasks: taskFile.tasks.filter((t) => !t.passes).length,
-          });
-        } catch (err) {
-          debug("runLoop", `Failed to parse tasks file: ${err}`);
-          taskFile = null;
+        let taskFile: TaskFile | null = null;
+        if (taskFileContent) {
+          try {
+            taskFile = JSON.parse(taskFileContent) as TaskFile;
+            debug("runLoop", "Parsed tasks file", {
+              taskCount: taskFile.tasks.length,
+              openTasks: taskFile.tasks.filter((t) => !t.passes).length,
+            });
+          } catch (err) {
+            debug("runLoop", `Failed to parse tasks file: ${err}`);
+            taskFile = null;
+          }
+        }
+
+        const allComplete = taskFile && !hasOpenTasks(taskFile);
+        debug("runLoop", `All tasks complete: ${allComplete}`);
+
+        if (allComplete) {
+          console.log("\n✅ All tasks complete!");
+          debug("runLoop", "Writing completed state");
+          await writeState({ ...state, iteration: i, status: "completed", feature: featureName });
+
+          debug("runLoop", "Sending notification");
+          await notify("Ralph Complete", `${label} complete after ${i} iterations`);
+
+          if (config.hooks) {
+            debug("runLoop", "Running on-complete hook");
+            await runHook("on-complete", featureName, modelConfig?.onComplete);
+          }
+
+          debug("runLoop", "Running executor cleanup");
+          await executor.cleanup();
+
+          // Check queue for next feature
+          debug("runLoop", "About to check queue for next feature");
+          const ranNext = await runNextFromQueue(config.debug, modelConfig, config.hooks);
+          debug("runLoop", `runNextFromQueue returned: ${ranNext}`);
+
+          if (ranNext) {
+            debug("runLoop", "Next feature started, returning from runLoop");
+            return;
+          }
+
+          debug("runLoop", "No queued features, exiting with code 0");
+          process.exit(0);
         }
       }
 
-      const allComplete = taskFile && !hasOpenTasks(taskFile);
-      debug("runLoop", `All tasks complete: ${allComplete}`);
-
-      if (allComplete) {
+      // Check token-based completion (for run mode)
+      if (assistantText.includes("<promise>ALL TASKS COMPLETE</promise>")) {
         console.log("\n✅ All tasks complete!");
-        debug("runLoop", "Writing completed state");
         await writeState({ ...state, iteration: i, status: "completed", feature: featureName });
-
-        debug("runLoop", "Sending notification");
         await notify("Ralph Complete", `${label} complete after ${i} iterations`);
-
         if (config.hooks) {
-          debug("runLoop", "Running on-complete hook");
           await runHook("on-complete", featureName, modelConfig?.onComplete);
         }
-
-        debug("runLoop", "Running executor cleanup");
         await executor.cleanup();
-
-        // Check queue for next feature
-        debug("runLoop", "About to check queue for next feature");
-        const ranNext = await runNextFromQueue(config.debug, modelConfig, config.hooks);
-        debug("runLoop", `runNextFromQueue returned: ${ranNext}`);
-
-        if (ranNext) {
-          debug("runLoop", "Next feature started, returning from runLoop");
-          return;
-        }
-
-        debug("runLoop", "No queued features, exiting with code 0");
         process.exit(0);
       }
 
