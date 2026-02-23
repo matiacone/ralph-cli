@@ -83,6 +83,7 @@ export const DEFAULT_RUN_PROMPT = `You are an autonomous agent working through G
 1. Run \`gh issue list --state open --json number,title,body,labels\` to see all open issues.
 2. If there are NO open issues, output <promise>ALL TASKS COMPLETE</promise> and stop immediately.
 3. Determine the most important issue to work on:
+   - Skip issues labeled "idea" — these are saved for later and not actionable
    - Check each issue's "Blocked by" section — only pick issues whose blockers are all closed
    - Prioritize unblocked issues by importance/dependency order
 4. If the issue title is prefixed with "XYZ: " (e.g., "Search: Create search record"):
