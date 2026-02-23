@@ -1,9 +1,9 @@
 {
   "name": "ralph-run",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Autonomous Claude Code runner that executes tasks from a backlog or feature plans",
   "bin": {
-    "ralph": "./bin/ralph.js"
+    "ralph": "bin/ralph.js"
   },
   "files": [
     "bin",
