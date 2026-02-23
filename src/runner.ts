@@ -91,10 +91,12 @@ export async function runLoop(config: LoopConfig): Promise<void> {
   const executor = config.executor ?? new LocalExecutor();
   await executor.initialize();
 
-  const cleanup = async () => {
+  const cleanup = () => {
     console.log(`\n${c.yellow}Cancelling...${c.reset}`);
-    await writeState({ ...state, status: "cancelled" });
-    await executor.cleanup();
+    executor.abort();
+    // Best-effort state write and service cleanup, don't block exit
+    writeState({ ...state, status: "cancelled" }).catch(() => {});
+    executor.cleanup().catch(() => {});
     process.exit(130);
   };
   process.on("SIGINT", cleanup);

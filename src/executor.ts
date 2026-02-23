@@ -18,5 +18,6 @@ export interface Executor {
     options?: ExecuteOptions
   ): Promise<ExecutionResult>;
   readFile(path: string): Promise<string | null>;
+  abort(): void;
   cleanup(): Promise<void>;
 }

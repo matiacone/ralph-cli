@@ -1,23 +1,15 @@
 import type { Executor, ExecutionResult, ExecuteOptions } from "../executor";
 import { readConfig } from "../../lib";
 import { ServiceManager } from "../services";
-import { join } from "path";
-import { homedir } from "os";
+import { debug } from "../debug";
 
 const MCP_CONFIG_PATH = ".ralph/mcp-config.json";
 
 async function gatherMcpConfig(): Promise<string | null> {
   const servers: Record<string, unknown> = {};
 
-  // Read user-level MCPs from ~/.claude.json
-  try {
-    const userConfig = await Bun.file(join(homedir(), ".claude.json")).json();
-    if (userConfig.mcpServers) {
-      Object.assign(servers, userConfig.mcpServers);
-    }
-  } catch {}
-
-  // Read project-level MCPs from .mcp.json
+  // Only read project-level MCPs from .mcp.json
+  // User-level MCPs (e.g. pencil, chrome) are for interactive use and can hang in headless mode
   try {
     const projectMcp = await Bun.file(".mcp.json").json();
     Object.assign(servers, projectMcp);
@@ -32,6 +24,7 @@ async function gatherMcpConfig(): Promise<string | null> {
 export class LocalExecutor implements Executor {
   private serviceManager: ServiceManager | null = null;
   private mcpConfigPath: string | null = null;
+  private currentProc: ReturnType<typeof Bun.spawn> | null = null;
 
   async initialize(): Promise<void> {
     this.mcpConfigPath = await gatherMcpConfig();
@@ -68,6 +61,8 @@ export class LocalExecutor implements Executor {
 
     args.push(prompt);
 
+    debug("executor", "Spawning claude", { args: args.filter(a => a !== prompt).join(" "), mcpConfig: this.mcpConfigPath });
+
     // Strip ANTHROPIC_API_KEY so claude uses OAuth (Max plan) instead of API credits
     const env = Object.fromEntries(
       Object.entries(process.env).filter(([key]) => key !== "ANTHROPIC_API_KEY")
@@ -77,6 +72,7 @@ export class LocalExecutor implements Executor {
       stdio: ["inherit", "pipe", "pipe"],
       env,
     });
+    this.currentProc = proc;
 
     let output = "";
     const decoder = new TextDecoder();
@@ -101,7 +97,15 @@ export class LocalExecutor implements Executor {
     ]);
 
     const exitCode = await proc.exited;
+    this.currentProc = null;
     return { exitCode, output };
+  }
+
+  abort(): void {
+    if (this.currentProc) {
+      this.currentProc.kill();
+      this.currentProc = null;
+    }
   }
 
   async readFile(path: string): Promise<string | null> {
