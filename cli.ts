@@ -7,6 +7,7 @@ await autoUpdate();
 import { setup } from "./src/commands/setup";
 import { run } from "./src/commands/run";
 import { help } from "./src/commands/help";
+import { completions } from "./src/commands/completions";
 
 async function version() {
   const pkg = await Bun.file(import.meta.dir + "/package.json").json();
@@ -26,6 +27,9 @@ switch (command) {
   case "--version":
   case "-v":
     await version();
+    break;
+  case "completions":
+    completions();
     break;
   case "help":
   case "--help":
