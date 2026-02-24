@@ -14,7 +14,8 @@ Commands:
   setup              Initialize Ralph in current project
                      --max-iterations <n>  Set max iterations (default: 50)
 
-  completions        Output shell completions (eval "$(ralph completions)")
+  completions        Install shell completions to your bashrc/zshrc
+                     --print               Output completion script to stdout
 
   help               Show this message`);
 }

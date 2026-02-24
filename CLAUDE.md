@@ -81,4 +81,4 @@ Each iteration:
 
 ## Environment Variables
 
-- `NTFY_URL` - Optional notification URL
+- `SLACK_WEBHOOK_URL` - Optional Slack webhook for notifications

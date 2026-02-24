@@ -24,7 +24,8 @@
       "Bash(bun cli.ts:*)",
       "Bash(claude mcp:*)",
       "Bash(systemctl:*)",
-      "Bash(npm search:*)"
+      "Bash(npm search:*)",
+      "Bash(npm publish:*)"
     ],
     "additionalDirectories": [
       "/home/mathew/creations/deal-deploy"

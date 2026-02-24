@@ -1,4 +1,4 @@
-const NTFY_URL = process.env.NTFY_URL;
+const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
 
 export type ModelAlias = "sonnet" | "opus" | "haiku" | "opusplan";
 
@@ -49,11 +49,12 @@ export async function writeConfig(config: RalphConfig) {
 }
 
 export async function notify(title: string, message: string, priority = "default") {
-  if (!NTFY_URL) return;
-  await fetch(NTFY_URL, {
+  if (!SLACK_WEBHOOK_URL) return;
+  const emoji = priority === "high" ? ":rotating_light:" : ":white_check_mark:";
+  await fetch(SLACK_WEBHOOK_URL, {
     method: "POST",
-    headers: { Title: title, Priority: priority },
-    body: message,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: `${emoji} *${title}*\n${message}` }),
   }).catch(() => {});
 }
 

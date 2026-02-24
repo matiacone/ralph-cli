@@ -29,7 +29,7 @@ switch (command) {
     await version();
     break;
   case "completions":
-    completions();
+    await completions(args);
     break;
   case "help":
   case "--help":
