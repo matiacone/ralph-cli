@@ -35,16 +35,14 @@ describe("prompt functions", () => {
   });
 
   describe("getRunPrompt", () => {
-    test("returns prompt containing progress file reference", async () => {
+    test("returns prompt from run.md file", async () => {
       await Bun.write(".ralph/prompts/run.md", "Work through GitHub issues.");
       const prompt = await getRunPrompt();
-      expect(prompt).toContain("@.ralph/progress.txt");
       expect(prompt).toContain("Work through GitHub issues.");
     });
 
     test("creates default run.md when file does not exist", async () => {
       const prompt = await getRunPrompt();
-      expect(prompt).toContain("@.ralph/progress.txt");
       expect(prompt).toContain("gh issue list");
       // Verify the file was created
       const exists = await Bun.file(".ralph/prompts/run.md").exists();

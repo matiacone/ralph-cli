@@ -49,7 +49,6 @@ await Bun.$`git status`;
 All state lives in `.ralph/`:
 - `state.json` - Iteration count, status
 - `config.json` - Model configuration
-- `progress.txt` - Append-only log
 - `prompts/run.md` - Customizable run prompt
 
 ## CLI Commands

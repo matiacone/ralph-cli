@@ -16,9 +16,8 @@
    FAILURE TO VERIFY = TASK NOT COMPLETE. If you skip verification, you are lying about the task being done.
 
 5. Mark the task complete in tasks.json by setting "passes": true.
-   Include in your progress entry WHAT verification you performed (e.g., "Verified: /chrome screenshot" or "Verified: unit test added" or "Verified: ran test:myFunction").
-6. Append a concise progress entry to progress.txt:
-   Format: [TIMESTAMP] Task: <title> | Verified: <what verification was done> | <1-2 sentence summary> | Gotchas: <any important learnings, or "none">
+6. Comment on the GitHub issue with your progress:
+   `gh issue comment <number> --body "Task: <title> | Verified: <what verification was done> | <1-2 sentence summary> | Gotchas: <any important learnings, or none>"`
 7. Use the `/ralph:commit` command to commit and submit. This is MANDATORY.
    ⚠️ NEVER run git or graphite commands yourself (no `git checkout`, `git commit`, `gt create`, `gt track`, etc.)
    ⚠️ NEVER checkout develop/main before creating the branch - the branch must be created from your current stack position

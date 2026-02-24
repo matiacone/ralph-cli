@@ -43,9 +43,6 @@ tmux new -s ralph
 # Watch the logs in real-time
 tail -f ~/ralph-workspace/.ralph/ralph.log
 
-# Check progress summaries
-cat ~/ralph-workspace/.ralph/progress.txt
-
 # Check remaining tasks
 jq '.tasks[] | select(.passes == false)' ~/ralph-workspace/.ralph/prd.json
 ```
