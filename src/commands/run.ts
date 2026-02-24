@@ -9,6 +9,9 @@ export async function run(args: string[]) {
   checkRepoRoot();
   if (!force) await checkCleanWorkingTree();
 
+  const progressFile = Bun.file(".ralph/progress.txt");
+  if (!(await progressFile.exists())) await Bun.write(progressFile, "");
+
   const prompt = await getRunPrompt();
 
   if (once) {

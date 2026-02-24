@@ -23,6 +23,7 @@ ralph setup
 This creates:
 - `.ralph/backlog.json` - Task backlog
 - `.ralph/state.json` - Runner state
+- `.ralph/progress.txt` - Progress log
 
 ### Notifications (optional)
 
@@ -57,6 +58,7 @@ ralph feature <name> --once
 Feature directories contain:
 - `plan.md` - Feature plan and context
 - `tasks.json` - Task breakdown
+- `progress.txt` - Progress log
 
 ### Other Commands
 

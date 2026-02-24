@@ -97,11 +97,11 @@ export const DEFAULT_RUN_PROMPT = `You are an autonomous agent working through G
    - Tests: bun run test
 7. Verify your work:
    - Use tests and/or browser verification (via /chrome) to confirm the changes work
-8. Commit using \`/ralph-commit\`:
+8. Append progress to .ralph/progress.txt:
+    [TIMESTAMP] Issue #<number>: <title> | Verified: <method> | <summary> | Gotchas: <notes>
+9. Commit using \`/ralph-commit\`:
    - **Artifact issues** (title prefixed "XYZ: "): Use ONE branch for the entire feature (e.g., \`ralph/search\`). All issues under the same artifact go on the same branch.
    - **Standalone issues**: Create one branch per issue (e.g., \`ralph/fix-login-bug\`)
-9. Track progress on the issue by commenting:
-    \`gh issue comment <number> --body "<what you did, what you verified, any gotchas>"\`
 10. Close the issue: \`gh issue close <number>\`
 
 ONLY WORK ON A SINGLE ISSUE PER ITERATION.
@@ -114,7 +114,7 @@ export async function getRunPrompt(): Promise<string> {
     await Bun.write(promptPath, DEFAULT_RUN_PROMPT);
   }
   const instructions = await Bun.file(promptPath).text();
-  return instructions;
+  return `@.ralph/progress.txt\n${instructions}`;
 }
 
 export async function hasUncommittedChanges(): Promise<boolean> {

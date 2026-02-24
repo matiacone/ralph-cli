@@ -15,8 +15,8 @@
    FAILURE TO VERIFY = TASK NOT COMPLETE. If you skip verification, you are lying about the task being done.
 
 4. Update the backlog.json with the work that was done (set passes: true when complete).
-5. Comment on the GitHub issue with your progress:
-   `gh issue comment <number> --body "Task: <title> | Branch: <branch> | Verified: <what verification was done> | <1-2 sentence summary> | Gotchas: <any important learnings, or none>"`
+5. Append a concise progress entry to progress.txt:
+   Format: [TIMESTAMP] Task: <title> | Branch: <branch> | Verified: <what verification was done> | <1-2 sentence summary> | Gotchas: <any important learnings, or "none">
 6. Make a git commit and submit PR:
    - Check the current branch with 'git branch --show-current'
    - If you are NOT on the task's branch:

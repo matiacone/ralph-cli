@@ -33,6 +33,11 @@ export async function setup(args: string[]) {
     console.log("📝 Created .ralph/config.json");
   }
 
+  const progressFile = Bun.file(".ralph/progress.txt");
+  if (!(await progressFile.exists())) {
+    await Bun.write(progressFile, "");
+  }
+
   const stateFile = Bun.file(".ralph/state.json");
   if (!(await stateFile.exists())) {
     await writeState({
